@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3 uid="uid://cxcd00vlo3a7e"]
+[gd_scene load_steps=16 format=3 uid="uid://cxcd00vlo3a7e"]
 
 [ext_resource type="PackedScene" uid="uid://clc5dre31iskm" path="res://addons/godot-xr-tools/xr/start_xr.tscn" id="1_0xm2m"]
 [ext_resource type="Script" uid="uid://70tj7o1n80ve" path="res://main.gd" id="1_lquwl"]
@@ -17,14 +17,6 @@ sky_material = SubResource("ProceduralSkyMaterial_0xm2m")
 background_mode = 2
 sky = SubResource("Sky_h2yge")
 tonemap_mode = 2
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_272bh"]
-transparency = 1
-blend_mode = 2
-
-[sub_resource type="PlaneMesh" id="PlaneMesh_lquwl"]
-material = SubResource("StandardMaterial3D_272bh")
-size = Vector2(10, 10)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7mycd"]
 transparency = 1
@@ -65,79 +57,33 @@ shadow_enabled = true
 
 [node name="XROrigin3D" parent="." instance=ExtResource("2_0xm2m")]
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-visible = false
-mesh = SubResource("PlaneMesh_lquwl")
+[node name="Table" type="StaticBody3D" parent="."]
 
-[node name="StaticBody3D" type="StaticBody3D" parent="."]
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Table"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.497465)
 mesh = SubResource("BoxMesh_7mycd")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Table"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.497465)
 shape = SubResource("ConvexPolygonShape3D_272bh")
 
-[node name="PickableObject" parent="." instance=ExtResource("3_h2yge")]
+[node name="Test Cube" parent="." instance=ExtResource("3_h2yge")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.63057905, 0.32670283)
 release_mode = 1
 second_hand_grab = 1
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="PickableObject"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Test Cube"]
 mesh = SubResource("BoxMesh_5vw27")
 
-[node name="CollisionShape3D2" type="CollisionShape3D" parent="PickableObject"]
+[node name="CollisionShape3D2" type="CollisionShape3D" parent="Test Cube"]
 shape = SubResource("ConvexPolygonShape3D_kek77")
 
-[node name="Node3D" type="Node3D" parent="PickableObject"]
+[node name="Node3D" type="Node3D" parent="Test Cube"]
 script = ExtResource("4_1bvp3")
 
-[node name="PickableObject4" parent="." instance=ExtResource("3_h2yge")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.63057905, 0.32670283)
-release_mode = 1
-second_hand_grab = 1
+[node name="Floor" type="StaticBody3D" parent="."]
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="PickableObject4"]
-mesh = SubResource("BoxMesh_5vw27")
-
-[node name="CollisionShape3D2" type="CollisionShape3D" parent="PickableObject4"]
-shape = SubResource("ConvexPolygonShape3D_kek77")
-
-[node name="Node3D" type="Node3D" parent="PickableObject4"]
-script = ExtResource("4_1bvp3")
-
-[node name="PickableObject3" parent="." instance=ExtResource("3_h2yge")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.63057905, 0.32670283)
-release_mode = 1
-second_hand_grab = 1
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="PickableObject3"]
-mesh = SubResource("BoxMesh_5vw27")
-
-[node name="CollisionShape3D2" type="CollisionShape3D" parent="PickableObject3"]
-shape = SubResource("ConvexPolygonShape3D_kek77")
-
-[node name="Node3D" type="Node3D" parent="PickableObject3"]
-script = ExtResource("4_1bvp3")
-
-[node name="PickableObject2" parent="." instance=ExtResource("3_h2yge")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.63057905, 0.32670283)
-release_mode = 1
-second_hand_grab = 1
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="PickableObject2"]
-mesh = SubResource("BoxMesh_5vw27")
-
-[node name="CollisionShape3D2" type="CollisionShape3D" parent="PickableObject2"]
-shape = SubResource("ConvexPolygonShape3D_kek77")
-
-[node name="Node3D" type="Node3D" parent="PickableObject2"]
-script = ExtResource("4_1bvp3")
-
-[node name="StaticBody3D2" type="StaticBody3D" parent="."]
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D2"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
 transform = Transform3D(10, 0, 0, 0, 1, 0, 0, 0, 10, 0, -0.49325752, 0)
 shape = SubResource("BoxShape3D_1bvp3")
 

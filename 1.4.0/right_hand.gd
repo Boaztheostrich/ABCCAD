@@ -157,6 +157,17 @@ func _spawn_cube():
 		push_warning("Failed to instantiate scene.")
 		return
 
+	# ⭐ NEW: Detect the shape type from the scene name
+	var shape_type = "cube"
+	var scene_name = scene_to_use.resource_path.get_file().get_basename().to_lower()
+	
+	if "wedge" in scene_name or "triangle" in scene_name:
+		shape_type = "wedge"
+	
+	# Store that info inside the node
+	cube.set_meta("shape_type", shape_type)
+	print("[XR] DEBUG: Spawning shape type:", shape_type)
+
 	print("[XR] DEBUG: Cube instantiated, type:", cube.get_class())
 	
 	# Spawn relative to controller
@@ -190,7 +201,7 @@ func _spawn_cube():
 		print("[XR] DEBUG: Cube children:", cube.get_children())
 
 	if debug_logging:
-		print("[XR] Spawned cube with color:", current_color)
+		print("[XR] Spawned", shape_type, "with color:", current_color)
 
 	# Wake physics next frame if needed
 	call_deferred("_wake_block", cube)
@@ -243,11 +254,6 @@ func on_cube_grabbed(pickable: Node, by: Node3D, grab_info: Object):
 	print("==================================================")
 
 	held_cube = pickable
-	var mesh_instance = pickable.get_node_or_null("MeshInstance3D")
-	#if mesh_instance and mesh_instance.has_method("get_color"):
-		#current_color = mesh_instance.get_color()
-	#if debug_logging:
-		#print("[XR] Grabbed cube, syncing color to:", current_color)
 
 func on_cube_released(pickable: Node, by: Node3D, grab_info: Object):
 	print("==================================================")
@@ -292,19 +298,37 @@ func _export_voxels_to_stl():
 	# Get all voxel grid positions
 	var grid_positions = VoxelDatabase.get_all_voxels()
 	
-	# For each voxel, add its cube geometry
+	var cube_count = 0
+	var wedge_count = 0
+	
+	# Handle different shape types
 	for grid_pos in grid_positions:
 		var world_pos = VoxelDatabase.grid_to_world(grid_pos)
-		var voxel_obj = VoxelDatabase.get_voxel(grid_pos)
+		var voxel_data = VoxelDatabase.get_voxel_data(grid_pos)
 		
-		if voxel_obj and is_instance_valid(voxel_obj):
-			_add_cube_to_surface(st, world_pos, VoxelDatabase.voxel_size)
+		if voxel_data and is_instance_valid(voxel_data.object):
+			print("  🔧 Exporting", voxel_data.shape_type, "at grid:", grid_pos, "world:", world_pos)
+			
+			match voxel_data.shape_type:
+				"cube":
+					_add_cube_to_surface(st, world_pos, VoxelDatabase.voxel_size)
+					cube_count += 1
+					print("    ✅ Added cube")
+				"wedge":
+					print("    🔺 Wedge rotation basis:", voxel_data.rotation)
+					_add_wedge_to_surface(st, world_pos, VoxelDatabase.voxel_size, voxel_data.rotation)
+					wedge_count += 1
+					print("    ✅ Added wedge")
+				_:
+					print("⚠️ Unknown shape type:", voxel_data.shape_type, "at", grid_pos)
+	
+	print("📊 Export summary: ", cube_count, "cubes, ", wedge_count, "wedges")
 	
 	# Commit the combined mesh
 	var combined_mesh := st.commit()
 	print("✅ Mesh combined with", combined_mesh.get_surface_count(), "surface(s)")
 	
-	# 🆕 Get the Downloads folder path (cross-platform)
+	# Get the Downloads folder path (cross-platform)
 	var downloads_path: String = OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS)
 	
 	# Create timestamped filename
@@ -345,8 +369,64 @@ func _add_cube_to_surface(st: SurfaceTool, pos: Vector3, size: float):
 		[3, 6, 2,  3, 7, 6],  # Top
 		[4, 1, 5,  4, 0, 1]   # Bottom
 	]
+	
 	# Add all triangles
 	for face in faces:
 		for idx in face:
 			var vert = verts[idx]
 			st.add_vertex(vert)
+
+
+# ⭐ NEW: Helper function to add a wedge at a specific position with rotation
+func _add_wedge_to_surface(
+	st: SurfaceTool,
+	pos: Vector3, # This is the voxel CORNER provided by grid_to_world
+	size: float,
+	rotation: Basis
+):
+	# Calculate the center of the voxel
+	var half_size = size * 0.5
+	var center = pos + Vector3(half_size, half_size, half_size)
+
+	# Define vertices relative to the CENTER (range -0.5 to 0.5)
+	# This corresponds to your wedge shape (Slope goes down from Left to Right)
+	var verts = [
+		Vector3(0.5, -0.5, -0.5),  # 0: bottom right back
+		Vector3(0.5, -0.5, 0.5),   # 1: bottom right front
+		Vector3(-0.5, -0.5, 0.5),  # 2: bottom left front
+		Vector3(-0.5, -0.5, -0.5), # 3: bottom left back
+		Vector3(-0.5, 0.5, -0.5),  # 4: top left back
+		Vector3(-0.5, 0.5, 0.5),   # 5: top left front
+	]
+
+	# Apply Rotation and Position
+	for i in range(verts.size()):
+		# 1. Scale 
+		var v = verts[i] * size
+		
+		# 2. Rotate around the center (local 0,0,0)
+		v = rotation * v
+		
+		# 3. Move to the voxel's world center
+		verts[i] = v + center
+
+	# Define Faces (Triangle indices)
+	var triangles = [
+		# Bottom Face
+		[0, 2, 1],
+		[0, 3, 2],
+		# Sloped Face
+		[3, 5, 2],
+		[3, 4, 5],
+		# Vertical Face (Back)
+		[3, 4, 0],
+		# Vertical Face (Front)
+		[2, 5, 1],
+		# Vertical Face (Right side - the tall side)
+		[0, 4, 5],
+		[0, 5, 1],
+	]
+
+	for tri in triangles:
+		for idx in tri:
+			st.add_vertex(verts[idx])
