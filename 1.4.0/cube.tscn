@@ -37,5 +37,5 @@ script = ExtResource("2_ftslj")
 [node name="CollisionShape3D2" type="CollisionShape3D" parent="."]
 shape = SubResource("ConvexPolygonShape3D_y8ul7")
 
-[node name="Node3D" type="Node3D" parent="."]
+[node name="VoxelLogic" type="Node3D" parent="."]
 script = ExtResource("1_jbd7x")
