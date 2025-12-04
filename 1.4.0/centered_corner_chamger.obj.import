@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://cfvb7l4wjovhm"
+path="res://.godot/imported/centered_corner_chamger.obj-0bee01319522c5378e2cac27d8289e61.mesh"
+
+[deps]
+
+files=["res://.godot/imported/centered_corner_chamger.obj-0bee01319522c5378e2cac27d8289e61.mesh"]
+
+source_file="res://centered_corner_chamger.obj"
+dest_files=["res://.godot/imported/centered_corner_chamger.obj-0bee01319522c5378e2cac27d8289e61.mesh", "res://.godot/imported/centered_corner_chamger.obj-0bee01319522c5378e2cac27d8289e61.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false

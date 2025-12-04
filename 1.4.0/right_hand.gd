@@ -163,6 +163,8 @@ func _spawn_cube():
 	
 	if "wedge" in scene_name or "triangle" in scene_name:
 		shape_type = "wedge"
+	elif "corner" in scene_name:
+		shape_type = "corner_wedge"
 	
 	# Store that info inside the node
 	cube.set_meta("shape_type", shape_type)
@@ -300,6 +302,7 @@ func _export_voxels_to_stl():
 	
 	var cube_count = 0
 	var wedge_count = 0
+	var corner_wedge_count = 0
 	
 	# Handle different shape types
 	for grid_pos in grid_positions:
@@ -314,6 +317,11 @@ func _export_voxels_to_stl():
 					_add_cube_to_surface(st, world_pos, VoxelDatabase.voxel_size)
 					cube_count += 1
 					print("    ✅ Added cube")
+				"corner_wedge":
+					print("    🔺 Corner wedge rotation basis:", voxel_data.rotation)
+					_add_corner_wedge_to_surface(st, world_pos, VoxelDatabase.voxel_size, voxel_data.rotation)
+					corner_wedge_count += 1
+					print("    ✅ Added corner wedge")
 				"wedge":
 					print("    🔺 Wedge rotation basis:", voxel_data.rotation)
 					_add_wedge_to_surface(st, world_pos, VoxelDatabase.voxel_size, voxel_data.rotation)
@@ -322,7 +330,7 @@ func _export_voxels_to_stl():
 				_:
 					print("⚠️ Unknown shape type:", voxel_data.shape_type, "at", grid_pos)
 	
-	print("📊 Export summary: ", cube_count, "cubes, ", wedge_count, "wedges")
+	print("📊 Export summary: ", cube_count, "cubes, ", wedge_count, "wedges", corner_wedge_count, "corner wedges")
 	
 	# Commit the combined mesh
 	var combined_mesh := st.commit()
@@ -376,6 +384,77 @@ func _add_cube_to_surface(st: SurfaceTool, pos: Vector3, size: float):
 			var vert = verts[idx]
 			st.add_vertex(vert)
 
+# ⭐ NEW: Helper function to add a corner wedge at a specific position with rotation
+# ⭐ NEW: Helper function to add a corner wedge (Pyramid style)
+# ⭐ NEW: Helper function to add a corner wedge (Pyramid style) with 3-Axis Correction
+# ⭐ NEW: Helper function with SEPARATED Tilt and Spin corrections
+# ⭐ NEW: Helper function with CORRECTED Rotation Order
+func _add_corner_wedge_to_surface(
+	st: SurfaceTool,
+	pos: Vector3,
+	size: float,
+	rotation: Basis
+):
+	var half_size = size * 0.5
+	var center = pos + Vector3(half_size, half_size, half_size)
+	
+	# --- 1. DEFINE GEOMETRY ---
+	# Peak at Top-Left-Back
+	var peak = Vector3(-0.5, 0.5, -0.5)
+	var bot_back_left = Vector3(-0.5, -0.5, -0.5)
+	var bot_back_right = Vector3(0.5, -0.5, -0.5)
+	var bot_fwd_right = Vector3(0.5, -0.5, 0.5)
+	var bot_fwd_left = Vector3(-0.5, -0.5, 0.5)
+	
+	var verts = [peak, bot_back_left, bot_back_right, bot_fwd_right, bot_fwd_left]
+	
+	# --- 2. APPLY CORRECTION ---
+	var x_tilt = 270.0   # Keeps it standing up (Good!)
+	var y_spin = 90.0    # NOW this will spin it like a turntable. Try 0, 90, 180, 270.
+	
+	var tilt_basis = Basis(Vector3.RIGHT, deg_to_rad(x_tilt))
+	var spin_basis = Basis(Vector3.UP, deg_to_rad(y_spin))
+	
+	# ⭐ KEY CHANGE HERE: Apply Spin FIRST, then Tilt.
+	# This ensures we rotate the shape correctly BEFORE standing it up.
+	var correction_basis = tilt_basis * spin_basis
+	
+	# --- 3. TRANSFORM VERTICES ---
+	for i in range(verts.size()):
+		var v = verts[i]
+		
+		# A. Apply Correction
+		v = correction_basis * v
+		
+		# B. Scale
+		v = v * size
+		
+		# C. Apply World Rotation
+		v = rotation * v
+		
+		# D. Move to Center
+		verts[i] = v + center
+	
+	# Re-assign
+	peak = verts[0]
+	bot_back_left = verts[1]
+	bot_back_right = verts[2]
+	bot_fwd_right = verts[3]
+	bot_fwd_left = verts[4]
+	
+	# --- 4. FACES ---
+	var triangles = [
+		[bot_back_left, bot_fwd_right, bot_back_right],
+		[bot_back_left, bot_fwd_left, bot_fwd_right],
+		[bot_back_left, peak, bot_back_right],
+		[bot_back_left, bot_fwd_left, peak],
+		[peak, bot_back_right, bot_fwd_right],
+		[peak, bot_fwd_right, bot_fwd_left]
+	]
+	
+	for tri in triangles:
+		for vert in tri:
+			st.add_vertex(vert)
 
 # ⭐ NEW: Helper function to add a wedge at a specific position with rotation
 func _add_wedge_to_surface(

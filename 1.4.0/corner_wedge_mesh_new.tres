@@ -1,0 +1,11 @@
+[gd_resource type="ArrayMesh" format=4 uid="uid://cipcuopk2ysu7"]
+
+[resource]
+_surfaces = [{
+"aabb": AABB(-0.05, -0.05, -0.05, 0.1, 0.1, 0.1),
+"format": 34359738375,
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 24,
+"vertex_data": PackedByteArray("zcxMvc3MTL3NzEy9zcxMvc3MTL3NzEw9zcxMPc3MTL3NzEy9zcxMvc3MTD3NzEy9zcxMPc3MTD3NzEy9zcxMvc3MTD3NzEw9zcxMvc3MTL3NzEy9zcxMPc3MTL3NzEy9zcxMPc3MTD3NzEy9zcxMvc3MTL3NzEy9zcxMPc3MTD3NzEy9zcxMvc3MTD3NzEy9zcxMvc3MTL3NzEw9zcxMvc3MTL3NzEy9zcxMvc3MTD3NzEy9zcxMvc3MTL3NzEw9zcxMvc3MTD3NzEy9zcxMvc3MTD3NzEw9zcxMPc3MTL3NzEy9zcxMvc3MTL3NzEw9zcxMvc3MTD3NzEw9zcxMPc3MTL3NzEy9zcxMvc3MTD3NzEw9zcxMPc3MTD3NzEy9/38AAAAA/7//fwAAAAD/v/9/AAAAAP+//3///wAA/7//f///AAD/v/9///8AAP+///////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCAAAD/f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+//7//f1RVqar/v/9/VFWpqv+//39UVamq/7//f1RVqar/v/9/VFWpqv+//39UVamq")
+}]

@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://bry03y103465e"]
+[gd_scene load_steps=11 format=3 uid="uid://bry03y103465e"]
 
 [ext_resource type="Script" uid="uid://c5tkjvl47mgia" path="res://left_hand.gd" id="1_2hs0m"]
 [ext_resource type="PackedScene" uid="uid://bq86r4yll8po" path="res://addons/godot-xr-tools/hands/scenes/lowpoly/left_fullglove_low.tscn" id="1_yu5ic"]
@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" uid="uid://bu65e8cbubayj" path="res://brick.tscn" id="6_1jxqw"]
 [ext_resource type="PackedScene" uid="uid://q1gdg4owb74t" path="res://wedge.tscn" id="7_dw050"]
 [ext_resource type="PackedScene" uid="uid://e1jjbvifbn3q" path="res://m_cube.tscn" id="8_b26j0"]
+[ext_resource type="PackedScene" uid="uid://wsk8byls04qi" path="res://Corner_piece.tscn" id="9_n7ghd"]
 
 [node name="XROrigin3D" type="XROrigin3D"]
 
@@ -26,7 +27,7 @@ pickable_scene = ExtResource("4_sweqy")
 [node name="RightHand" type="XRController3D" parent="."]
 tracker = &"right_hand"
 script = ExtResource("3_hqtel")
-block_scenes = Array[PackedScene]([ExtResource("6_1jxqw"), ExtResource("4_sweqy"), ExtResource("7_dw050"), ExtResource("8_b26j0")])
+block_scenes = Array[PackedScene]([ExtResource("6_1jxqw"), ExtResource("4_sweqy"), ExtResource("7_dw050"), ExtResource("8_b26j0"), ExtResource("9_n7ghd")])
 
 [node name="RightHand" parent="RightHand" instance=ExtResource("2_ojcpv")]
 

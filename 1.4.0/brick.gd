@@ -9,22 +9,11 @@ extends Node3D
 ]
 
 var last_grid_positions: Array[Vector3i] = []
-
-const ROTATION_BASES = [
-	# Horizontal orientations (brick lying flat)
-	Basis(Vector3.RIGHT, Vector3.UP, Vector3.BACK),      # 0: Along X axis
-	Basis(Vector3.LEFT, Vector3.UP, Vector3.FORWARD),    # 1: Along -X axis
-	Basis(Vector3.BACK, Vector3.UP, Vector3.RIGHT),      # 2: Along Z axis
-	Basis(Vector3.FORWARD, Vector3.UP, Vector3.LEFT),    # 3: Along -Z axis
-	
-	# Vertical orientations (brick standing up)
-	Basis(Vector3.UP, Vector3.BACK, Vector3.RIGHT),      # 4: Vertical along Y
-	Basis(Vector3.DOWN, Vector3.FORWARD, Vector3.RIGHT), # 5: Vertical along -Y
-	Basis(Vector3.UP, Vector3.RIGHT, Vector3.FORWARD),   # 6: Vertical along Y (rotated)
-	Basis(Vector3.DOWN, Vector3.LEFT, Vector3.FORWARD)   # 7: Vertical along -Y (rotated)
-]
+var _all_orthogonal_bases: Array[Basis] = []
 
 func _ready():
+	_generate_orthogonal_bases()
+	
 	var parent = get_parent()
 	print("Looking for signals on:", parent)
 	
@@ -40,172 +29,187 @@ func _ready():
 	if parent.has_signal("grabbed"):
 		parent.connect("grabbed", Callable(self, "_on_grabbed"))
 		print("✅ Connected to grabbed!")
+	
+	_print_debug_info("🟢 SPAWNED")
+
+func _generate_orthogonal_bases():
+	_all_orthogonal_bases.clear()
+	var dirs = [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.FORWARD, Vector3.BACK]
+	for forward in dirs:
+		for up in dirs:
+			if abs(forward.dot(up)) > 0.9: continue
+			var right = forward.cross(up).normalized()
+			_all_orthogonal_bases.append(Basis(right, up, -forward))
+	print("✅ Generated ", _all_orthogonal_bases.size(), " orthogonal bases")
+
+func find_closest_rotation(current_basis: Basis) -> Basis:
+	var best_basis = Basis.IDENTITY
+	var max_score = -INF
+	var clean_current = current_basis.orthonormalized()
+
+	for candidate in _all_orthogonal_bases:
+		var score = (clean_current.x.dot(candidate.x) + 
+					 clean_current.y.dot(candidate.y) + 
+					 clean_current.z.dot(candidate.z))
+		if score > max_score:
+			max_score = score
+			best_basis = candidate
+	
+	return best_basis
 
 func _on_grabbed(_by):
-	print("🔔 VOXEL SCRIPT: _on_grabbed() called by:", _by)
+	_print_debug_info("✊ GRABBED")
+	
+	var obj = get_parent()
+	if obj.has_method("set_sleeping"): obj.set_sleeping(false)
+	if obj is RigidBody3D: obj.freeze = false
+
 	for grid_pos in last_grid_positions:
 		VoxelDatabase.remove_voxel(grid_pos)
-		print("🗑️ Removed cube from position:", grid_pos)
 	last_grid_positions.clear()
 
 func _on_dropped(_by):
-	print("🔹 Dropped! Old position:", get_parent().global_position)
-
+	_print_debug_info("✋ RELEASED (Before Snap)")
 	var obj = get_parent()
 	
-	# Snap rotation first
+	print("   📦 Original shape_offsets: ", shape_offsets)
+	
+	# 1. Find Closest Rotation
 	var closest_basis = find_closest_rotation(obj.global_transform.basis)
-	print("🔄 Snapped to rotation index:", ROTATION_BASES.find(closest_basis))
+	print("   🔄 Closest basis X: ", closest_basis.x)
+	print("   🔄 Closest basis Y: ", closest_basis.y)
+	print("   🔄 Closest basis Z: ", closest_basis.z)
 	
-	# Get rotated offsets
+	# 2. Get Rotated Offsets and calculate dimensions
 	var rotated_offsets = get_rotated_offsets(closest_basis)
+	print("   🔄 Rotated offsets: ", rotated_offsets)
 	
-	# Find the minimum bounds (corner) of all offsets - this is our reference anchor point
-	# This ensures we always snap to integer grid positions, not fractional ones
-	var min_offset = get_minimum_bounds(rotated_offsets)
-	print("🎯 Reference corner offset (min bounds):", min_offset)
+	var min_bounds = get_minimum_bounds(rotated_offsets)
+	var max_bounds = get_maximum_bounds(rotated_offsets)
+	var dimensions = max_bounds - min_bounds + Vector3i.ONE
+	print("   📐 Bounds - Min: ", min_bounds, " Max: ", max_bounds, " Dimensions: ", dimensions)
 	
-	# Calculate where the reference corner is in world space from the object's current position
+	# 3. Calculate the geometric center offset (in grid units)
+	var center_offset = Vector3(min_bounds + max_bounds) / 2.0
+	print("   🎯 Center offset (grid units): ", center_offset)
+	
+	# 4. Snap the CENTER directly based on even/odd dimensions
 	var drop_pos = obj.global_position
-	var reference_corner_world = drop_pos + closest_basis * (Vector3(min_offset) * voxel_size)
+	var snapped_center = snap_center_for_dimensions(drop_pos, dimensions)
+	print("   📍 Drop position: ", drop_pos)
+	print("   📍 Snapped center: ", snapped_center)
 	
-	# Snap the reference corner directly to the grid
-	var snapped_reference_world = snap_to_voxel(reference_corner_world)
-	var snapped_reference_grid = VoxelDatabase.world_to_grid(snapped_reference_world)
-	print("🔹 Snapped reference corner at grid:", snapped_reference_grid)
-	
-	# Calculate where ALL voxels will be, relative to the reference corner
-	# Each offset is relative to the min_offset, so we add the delta to get the final position
+	# 5. Calculate grid positions from the snapped center
 	var new_grid_positions: Array[Vector3i] = []
 	for offset in rotated_offsets:
-		var delta = offset - min_offset  # Relative to reference corner
-		new_grid_positions.append(snapped_reference_grid + delta)
+		# Convert offset relative to center_offset, then add to snapped center grid
+		var relative_to_center = Vector3(offset) - center_offset
+		var world_pos = snapped_center + relative_to_center * voxel_size
+		var grid_pos = VoxelDatabase.world_to_grid(world_pos)
+		print("   🧱 Offset: ", offset, " -> relative: ", relative_to_center, " -> grid: ", grid_pos)
+		new_grid_positions.append(grid_pos)
 	
-	print("🔹 Will occupy positions:", new_grid_positions)
+	print("   ✅ Final grid positions: ", new_grid_positions)
 	
-	# Find all blocks that will be overlapped
+	# 6. Clear Overlaps
 	var blocks_to_delete: Array[Node] = []
 	for grid_pos in new_grid_positions:
 		if VoxelDatabase.has_voxel(grid_pos):
 			var existing_block = VoxelDatabase.get_voxel(grid_pos)
 			if existing_block != obj and is_instance_valid(existing_block):
 				if existing_block not in blocks_to_delete:
-					print("🗑️ Will delete overlapping block:", existing_block.name)
 					blocks_to_delete.append(existing_block)
 	
-	# Delete overlapping blocks - remove ALL their voxels first
 	for block in blocks_to_delete:
-		# Get all positions this block occupies using the database helper
-		var all_positions = VoxelDatabase.get_all_positions_for_object(block)
-		for pos in all_positions:
+		for pos in VoxelDatabase.get_all_positions_for_object(block):
 			VoxelDatabase.remove_voxel(pos)
-			print("  🗑️ Removed voxel at:", pos)
-		
-		# Now delete the node
 		block.queue_free()
-		print("✅ Deleted block:", block.name)
-	
-	# Clear old database entries for this object
+
 	for grid_pos in last_grid_positions:
 		if grid_pos not in new_grid_positions:
 			VoxelDatabase.remove_voxel(grid_pos)
 	
-	# Calculate object center from all grid positions
-	var center_world = calculate_center_from_grid_positions(new_grid_positions)
+	# 7. Apply Transform (center is already snapped correctly)
+	obj.global_transform = Transform3D(closest_basis, snapped_center)
+	print("   🎯 Final center: ", snapped_center)
 	
-	# Apply final transform
-	obj.global_transform = Transform3D(closest_basis, center_world)
-	
-	# Register in database
+	# 8. Register
+	var shape_type = obj.get_meta("shape_type", "brick")
 	for grid_pos in new_grid_positions:
-		VoxelDatabase.place_voxel(grid_pos, obj)
+		VoxelDatabase.place_voxel(grid_pos, obj, shape_type)
 	
 	last_grid_positions = new_grid_positions
-	print("✅ Registered in database at grid positions:", new_grid_positions)
 
-	# Lock physics
+	# Lock Physics
 	if obj.has_method("set_linear_velocity"):
 		obj.set_linear_velocity(Vector3.ZERO)
 		obj.set_angular_velocity(Vector3.ZERO)
 	if obj.has_method("set_sleeping"):
 		obj.set_sleeping(true)
-
-	print("✅ Object snapped and locked at:", center_world, "with rotation")
-
-func calculate_center_from_grid_positions(grid_positions: Array[Vector3i]) -> Vector3:
-	var sum = Vector3.ZERO
-	for grid_pos in grid_positions:
-		sum += VoxelDatabase.grid_to_world(grid_pos)
-	return sum / grid_positions.size()
-
-func snap_to_voxel(pos: Vector3) -> Vector3:
-	return Vector3(
-		round(pos.x / voxel_size) * voxel_size,
-		round(pos.y / voxel_size) * voxel_size,
-		round(pos.z / voxel_size) * voxel_size
-	)
-
-func find_closest_voxel_offset_to_drop_position(
-	world_pos: Vector3, 
-	offsets: Array[Vector3i], 
-	basis: Basis
-) -> Vector3i:
-	var closest_offset = offsets[0]
-	var min_distance = INF
-	
-	for offset in offsets:
-		var voxel_world = world_pos + basis * (Vector3(offset) * voxel_size)
-		var snapped = snap_to_voxel(voxel_world)
-		var distance = world_pos.distance_to(snapped)
 		
-		print("  🔍 Testing offset:", offset, "-> distance:", distance)
-		
-		if distance < min_distance:
-			min_distance = distance
-			closest_offset = offset
-	
-	return closest_offset
+	_print_debug_info("🔒 SNAPPED & LOCKED")
 
-func find_closest_rotation(current_basis: Basis) -> Basis:
-	var best_basis = ROTATION_BASES[0]
-	var best_dot = -1.0
+# NEW: Snap center based on whether each dimension is even or odd
+func snap_center_for_dimensions(center: Vector3, dimensions: Vector3i) -> Vector3:
+	var snapped = Vector3.ZERO
 	
-	# Use the primary axis (x-axis) of the brick to determine orientation
-	var current_primary = current_basis.x.normalized()
+	for i in range(3):
+		if dimensions[i] % 2 == 0:
+			# EVEN dimension: center should be at half-voxel positions (0.05, 0.15, 0.25...)
+			snapped[i] = (floorf(center[i] / voxel_size) + 0.5) * voxel_size
+		else:
+			# ODD dimension: center should be at whole-voxel positions (0.0, 0.1, 0.2...)
+			snapped[i] = roundf(center[i] / voxel_size) * voxel_size
 	
-	for basis in ROTATION_BASES:
-		var candidate_primary = basis.x.normalized()
-		var dot = abs(current_primary.dot(candidate_primary))
-		
-		if dot > best_dot:
-			best_dot = dot
-			best_basis = basis
+	print("   📐 snap_center_for_dimensions:")
+	print("      Input: ", center)
+	print("      Dimensions: ", dimensions)
+	print("      Even/Odd: [", "even" if dimensions.x % 2 == 0 else "odd", ", ", 
+							  "even" if dimensions.y % 2 == 0 else "odd", ", ",
+							  "even" if dimensions.z % 2 == 0 else "odd", "]")
+	print("      Output: ", snapped)
 	
-	return best_basis
+	return snapped
 
 func get_rotated_offsets(basis: Basis) -> Array[Vector3i]:
 	var rotated: Array[Vector3i] = []
-	
 	for offset in shape_offsets:
 		var rotated_vec = basis * Vector3(offset.x, offset.y, offset.z)
-		rotated.append(Vector3i(
-			roundi(rotated_vec.x),
-			roundi(rotated_vec.y),
-			roundi(rotated_vec.z)
-		))
-	
+		rotated.append(Vector3i(roundi(rotated_vec.x), roundi(rotated_vec.y), roundi(rotated_vec.z)))
 	return rotated
 
 func get_minimum_bounds(offsets: Array[Vector3i]) -> Vector3i:
-	# Find the minimum bounds (bottom-left-rear corner) to use as reference anchor
-	# This ensures objects always snap to integer grid positions
-	if offsets.is_empty():
-		return Vector3i.ZERO
-	
+	if offsets.is_empty(): return Vector3i.ZERO
 	var min_bounds = offsets[0]
 	for offset in offsets:
 		min_bounds.x = mini(min_bounds.x, offset.x)
 		min_bounds.y = mini(min_bounds.y, offset.y)
 		min_bounds.z = mini(min_bounds.z, offset.z)
-	
 	return min_bounds
+
+func get_maximum_bounds(offsets: Array[Vector3i]) -> Vector3i:
+	if offsets.is_empty(): return Vector3i.ZERO
+	var max_bounds = offsets[0]
+	for offset in offsets:
+		max_bounds.x = maxi(max_bounds.x, offset.x)
+		max_bounds.y = maxi(max_bounds.y, offset.y)
+		max_bounds.z = maxi(max_bounds.z, offset.z)
+	return max_bounds
+
+func _print_debug_info(stage: String):
+	var obj = get_parent()
+	var basis = obj.global_transform.basis
+	var euler = basis.get_euler()
+	print("========================================")
+	print("📐 [BRICK DEBUG]: ", stage)
+	print("   Block Name: ", obj.name)
+	print("   Global Position: ", obj.global_position)
+	print("   --- ORIENTATION ---")
+	print("   Forward (Z): ", basis.z)
+	print("   Up (Y):      ", basis.y)
+	print("   Right (X):   ", basis.x)
+	print("   Rotation (Deg): ", Vector3(rad_to_deg(euler.x), rad_to_deg(euler.y), rad_to_deg(euler.z)))
+	print("   --- SHAPE ---")
+	print("   shape_offsets: ", shape_offsets)
+	print("   last_grid_positions: ", last_grid_positions)
+	print("========================================")

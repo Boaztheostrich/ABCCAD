@@ -1,0 +1,30 @@
+[gd_scene load_steps=7 format=3 uid="uid://wsk8byls04qi"]
+
+[ext_resource type="Script" uid="uid://bs8x423e0qgit" path="res://addons/godot-xr-tools/objects/pickable.gd" id="1_8qpyi"]
+[ext_resource type="ArrayMesh" uid="uid://cfvb7l4wjovhm" path="res://centered_corner_chamger.obj" id="2_5md0w"]
+[ext_resource type="Script" uid="uid://q0qsqmmn18iu" path="res://corner_mesh_instance_3d.gd" id="3_m2b17"]
+[ext_resource type="Script" uid="uid://dbxndn8lwhskb" path="res://collision_shape_3d_2.gd" id="4_c5u4n"]
+[ext_resource type="Script" uid="uid://dvyik02wqevaj" path="res://wedge.gd" id="5_tl1u7"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_tq68t"]
+points = PackedVector3Array(-0.05, -0.05, -0.05, 0.05, -0.05, -0.05, -0.05, 0.05, -0.05, -0.05, -0.05, 0.05)
+
+[node name="Wedge" type="RigidBody3D"]
+collision_layer = 4
+collision_mask = 7
+script = ExtResource("1_8qpyi")
+release_mode = 1
+second_hand_grab = 1
+metadata/_custom_type_script = "uid://bs8x423e0qgit"
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(10, 0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0)
+mesh = ExtResource("2_5md0w")
+script = ExtResource("3_m2b17")
+
+[node name="CollisionShape3D2" type="CollisionShape3D" parent="."]
+shape = SubResource("ConvexPolygonShape3D_tq68t")
+script = ExtResource("4_c5u4n")
+
+[node name="VoxelLogic" type="Node3D" parent="."]
+script = ExtResource("5_tl1u7")
