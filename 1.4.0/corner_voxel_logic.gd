@@ -169,7 +169,7 @@ func _on_dropped(_by):
 	if mesh and mesh.has_method("get_color"):
 		current_color = mesh.get_color()
 	
-	var shape_type = obj.get_meta("shape_type", "wedge")
+	var shape_type = obj.get_meta("shape_type", "corner_piece")
 	for grid_pos in new_grid_positions:
 		VoxelDatabase.place_voxel(grid_pos, obj, shape_type, current_color)
 	

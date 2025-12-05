@@ -136,9 +136,14 @@ func _on_dropped(_by):
 	obj.global_transform = Transform3D(closest_basis, center_world)
 	
 	# 7. Register
-	var shape_type = obj.get_meta("shape_type", "cube")
+	var mesh = obj.get_node_or_null("MeshInstance3D")
+	var current_color = Color.WHITE
+	if mesh and mesh.has_method("get_color"):
+		current_color = mesh.get_color()
+	
+	var shape_type = obj.get_meta("shape_type", "m_cube")
 	for grid_pos in new_grid_positions:
-		VoxelDatabase.place_voxel(grid_pos, obj, shape_type)
+		VoxelDatabase.place_voxel(grid_pos, obj, shape_type, current_color)
 	
 	last_grid_positions = new_grid_positions
 

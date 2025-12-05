@@ -8,6 +8,14 @@ extends XRController3D
 @export var export_action_name: StringName = "trigger_click" # Trigger (export STL)
 @export var debug_logging: bool = true
 
+# --- Block Type Switching ---
+@export var block_scenes: Array[PackedScene] = []  # Assign in inspector: [cube.tscn, brick.tscn, etc.]
+@export var joystick_deadzone: float = 0.5
+@export var initial_delay: float = 0.6  # How long to hold before rapid-fire starts (seconds)
+@export var repeat_rate: float = 0.05   # How fast to repeat once holding (seconds)
+var current_block_index: int = 0
+var joystick_was_neutral: bool = true
+
 # --- Color State ---
 var colors := [Color.BLUE, Color.RED, Color.GREEN, Color.PINK, Color.YELLOW, Color.BLACK, Color.REBECCA_PURPLE]
 var current_color_index := 0
@@ -23,6 +31,10 @@ var held_cube: Node = null
 # --- Export State ---
 var export_cooldown: float = 0.0
 const EXPORT_COOLDOWN_TIME: float = 1.5  # Prevent accidental double-exports
+
+# --- INTERNAL STATE ---
+var _repeat_timer: float = 0.0
+var _current_dir: int = 0 # 0 = Neutral, -1 = Left, 1 = Right
 
 
 func _ready():
@@ -40,10 +52,14 @@ func _ready():
 func _process(delta: float) -> void:
 	if not _ready_frame_passed or not is_inside_tree():
 		return
+	
+	_check_joystick_undo_redo(delta)
 
 	# Update export cooldown
 	if export_cooldown > 0:
 		export_cooldown -= delta
+
+	# Check joystick for block type switching
 
 	# Read XR button states directly from controller
 	var spawn_pressed := is_button_pressed(spawn_action_name)
@@ -87,16 +103,85 @@ func _process(delta: float) -> void:
 	_prev_export_pressed = export_pressed
 
 
-# --- Spawning cubes ---
-func _spawn_cube():
-	if pickable_scene == null:
-		push_warning("Pickable scene not assigned.")
+# --- Block Type Switching ---
+
+
+
+func _check_joystick_undo_redo(delta: float):
+	# Get X axis of primary joystick on Left Hand
+	var joystick_x = get_vector2("primary").x 
+	
+	# Determine logical direction based on deadzone
+	var new_dir = 0
+	if joystick_x > joystick_deadzone:
+		new_dir = 1  # Right (Redo)
+	elif joystick_x < -joystick_deadzone:
+		new_dir = -1 # Left (Undo)
+	
+	# --- CASE 1: INPUT RELEASED ---
+	if new_dir == 0:
+		_current_dir = 0
+		_repeat_timer = 0.0
 		return
 
-	var cube := pickable_scene.instantiate()
-	if cube == null:
-		push_warning("Failed to instantiate pickable scene.")
+	# --- CASE 2: NEW PRESS (OR DIRECTION CHANGE) ---
+	if new_dir != _current_dir:
+		_current_dir = new_dir
+		_perform_action(new_dir) # Do it immediately
+		_repeat_timer = initial_delay # Set wait time for the repeat start
+		
+	# --- CASE 3: HOLDING ---
+	else:
+		_repeat_timer -= delta
+		if _repeat_timer <= 0.0:
+			_perform_action(new_dir) # Repeat action
+			_repeat_timer = repeat_rate # Reset short timer for next repeat
+
+func _perform_action(direction: int):
+	if direction == -1:
+		# LEFT = UNDO
+		VoxelDatabase.perform_undo(self)
+		trigger_haptic_pulse("haptic", 0, 0.1, 0.05, 0) # Very light pulse for repeats
+	elif direction == 1:
+		# RIGHT = REDO
+		VoxelDatabase.perform_redo(self)
+		trigger_haptic_pulse("haptic", 0, 0.1, 0.05, 0)
+
+# --- Spawning cubes ---
+func _spawn_cube():
+	# Use block_scenes array if available, otherwise fall back to pickable_scene
+	var scene_to_use: PackedScene = null
+	
+	if block_scenes.size() > 0:
+		if current_block_index >= block_scenes.size():
+			current_block_index = 0
+		scene_to_use = block_scenes[current_block_index]
+		if scene_to_use == null:
+			push_warning("Block scene at index ", current_block_index, " is null!")
+			return
+	elif pickable_scene != null:
+		scene_to_use = pickable_scene
+	else:
+		push_warning("No scenes assigned for spawning!")
 		return
+
+	var cube := scene_to_use.instantiate()
+	if cube == null:
+		push_warning("Failed to instantiate scene.")
+		return
+
+	# ⭐ NEW: Detect the shape type from the scene name
+	var shape_type = "cube"
+	var scene_name = scene_to_use.resource_path.get_file().get_basename().to_lower()
+	
+	if "wedge" in scene_name or "triangle" in scene_name:
+		shape_type = "wedge"
+	elif "corner" in scene_name:
+		shape_type = "corner_wedge"
+	
+	# Store that info inside the node
+	cube.set_meta("shape_type", shape_type)
+	print("[XR] DEBUG: Spawning shape type:", shape_type)
 
 	print("[XR] DEBUG: Cube instantiated, type:", cube.get_class())
 	
@@ -131,7 +216,7 @@ func _spawn_cube():
 		print("[XR] DEBUG: Cube children:", cube.get_children())
 
 	if debug_logging:
-		print("[XR] Spawned cube with color:", current_color)
+		print("[XR] Spawned", shape_type, "with color:", current_color)
 
 	# Wake physics next frame if needed
 	call_deferred("_wake_block", cube)
@@ -184,11 +269,6 @@ func on_cube_grabbed(pickable: Node, by: Node3D, grab_info: Object):
 	print("==================================================")
 
 	held_cube = pickable
-	var mesh_instance = pickable.get_node_or_null("MeshInstance3D")
-	#if mesh_instance and mesh_instance.has_method("get_color"):
-		#current_color = mesh_instance.get_color()
-	#if debug_logging:
-		#print("[XR] Grabbed cube, syncing color to:", current_color)
 
 func on_cube_released(pickable: Node, by: Node3D, grab_info: Object):
 	print("==================================================")
@@ -233,19 +313,43 @@ func _export_voxels_to_stl():
 	# Get all voxel grid positions
 	var grid_positions = VoxelDatabase.get_all_voxels()
 	
-	# For each voxel, add its cube geometry
+	var cube_count = 0
+	var wedge_count = 0
+	var corner_wedge_count = 0
+	
+	# Handle different shape types
 	for grid_pos in grid_positions:
 		var world_pos = VoxelDatabase.grid_to_world(grid_pos)
-		var voxel_obj = VoxelDatabase.get_voxel(grid_pos)
+		var voxel_data = VoxelDatabase.get_voxel_data(grid_pos)
 		
-		if voxel_obj and is_instance_valid(voxel_obj):
-			_add_cube_to_surface(st, world_pos, VoxelDatabase.voxel_size)
+		if voxel_data and is_instance_valid(voxel_data.object):
+			print("  🔧 Exporting", voxel_data.shape_type, "at grid:", grid_pos, "world:", world_pos)
+			
+			match voxel_data.shape_type:
+				"cube":
+					_add_cube_to_surface(st, world_pos, VoxelDatabase.voxel_size)
+					cube_count += 1
+					print("    ✅ Added cube")
+				"corner_wedge":
+					print("    🔺 Corner wedge rotation basis:", voxel_data.rotation)
+					_add_corner_wedge_to_surface(st, world_pos, VoxelDatabase.voxel_size, voxel_data.rotation)
+					corner_wedge_count += 1
+					print("    ✅ Added corner wedge")
+				"wedge":
+					print("    🔺 Wedge rotation basis:", voxel_data.rotation)
+					_add_wedge_to_surface(st, world_pos, VoxelDatabase.voxel_size, voxel_data.rotation)
+					wedge_count += 1
+					print("    ✅ Added wedge")
+				_:
+					print("⚠️ Unknown shape type:", voxel_data.shape_type, "at", grid_pos)
+	
+	print("📊 Export summary: ", cube_count, "cubes, ", wedge_count, "wedges", corner_wedge_count, "corner wedges")
 	
 	# Commit the combined mesh
 	var combined_mesh := st.commit()
 	print("✅ Mesh combined with", combined_mesh.get_surface_count(), "surface(s)")
 	
-	# 🆕 Get the Downloads folder path (cross-platform)
+	# Get the Downloads folder path (cross-platform)
 	var downloads_path: String = OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS)
 	
 	# Create timestamped filename
@@ -292,3 +396,184 @@ func _add_cube_to_surface(st: SurfaceTool, pos: Vector3, size: float):
 		for idx in face:
 			var vert = verts[idx]
 			st.add_vertex(vert)
+
+# ⭐ NEW: Helper function to add a corner wedge at a specific position with rotation
+# ⭐ NEW: Helper function to add a corner wedge (Pyramid style)
+# ⭐ NEW: Helper function to add a corner wedge (Pyramid style) with 3-Axis Correction
+# ⭐ NEW: Helper function with SEPARATED Tilt and Spin corrections
+# ⭐ NEW: Helper function with CORRECTED Rotation Order
+func _add_corner_wedge_to_surface(
+	st: SurfaceTool,
+	pos: Vector3,
+	size: float,
+	rotation: Basis
+):
+	var half_size = size * 0.5
+	var center = pos + Vector3(half_size, half_size, half_size)
+	
+	# --- 1. DEFINE GEOMETRY ---
+	# Peak at Top-Left-Back
+	var peak = Vector3(-0.5, 0.5, -0.5)
+	var bot_back_left = Vector3(-0.5, -0.5, -0.5)
+	var bot_back_right = Vector3(0.5, -0.5, -0.5)
+	var bot_fwd_right = Vector3(0.5, -0.5, 0.5)
+	var bot_fwd_left = Vector3(-0.5, -0.5, 0.5)
+	
+	var verts = [peak, bot_back_left, bot_back_right, bot_fwd_right, bot_fwd_left]
+	
+	# --- 2. APPLY CORRECTION ---
+	var x_tilt = 270.0   # Keeps it standing up (Good!)
+	var y_spin = 90.0    # NOW this will spin it like a turntable. Try 0, 90, 180, 270.
+	
+	var tilt_basis = Basis(Vector3.RIGHT, deg_to_rad(x_tilt))
+	var spin_basis = Basis(Vector3.UP, deg_to_rad(y_spin))
+	
+	# ⭐ KEY CHANGE HERE: Apply Spin FIRST, then Tilt.
+	# This ensures we rotate the shape correctly BEFORE standing it up.
+	var correction_basis = tilt_basis * spin_basis
+	
+	# --- 3. TRANSFORM VERTICES ---
+	for i in range(verts.size()):
+		var v = verts[i]
+		
+		# A. Apply Correction
+		v = correction_basis * v
+		
+		# B. Scale
+		v = v * size
+		
+		# C. Apply World Rotation
+		v = rotation * v
+		
+		# D. Move to Center
+		verts[i] = v + center
+	
+	# Re-assign
+	peak = verts[0]
+	bot_back_left = verts[1]
+	bot_back_right = verts[2]
+	bot_fwd_right = verts[3]
+	bot_fwd_left = verts[4]
+	
+	# --- 4. FACES ---
+	var triangles = [
+		[bot_back_left, bot_fwd_right, bot_back_right],
+		[bot_back_left, bot_fwd_left, bot_fwd_right],
+		[bot_back_left, peak, bot_back_right],
+		[bot_back_left, bot_fwd_left, peak],
+		[peak, bot_back_right, bot_fwd_right],
+		[peak, bot_fwd_right, bot_fwd_left]
+	]
+	
+	for tri in triangles:
+		for vert in tri:
+			st.add_vertex(vert)
+
+# ⭐ NEW: Helper function to add a wedge at a specific position with rotation
+func _add_wedge_to_surface(
+	st: SurfaceTool,
+	pos: Vector3, # This is the voxel CORNER provided by grid_to_world
+	size: float,
+	rotation: Basis
+):
+	# Calculate the center of the voxel
+	var half_size = size * 0.5
+	var center = pos + Vector3(half_size, half_size, half_size)
+
+	# Define vertices relative to the CENTER (range -0.5 to 0.5)
+	# This corresponds to your wedge shape (Slope goes down from Left to Right)
+	var verts = [
+		Vector3(0.5, -0.5, -0.5),  # 0: bottom right back
+		Vector3(0.5, -0.5, 0.5),   # 1: bottom right front
+		Vector3(-0.5, -0.5, 0.5),  # 2: bottom left front
+		Vector3(-0.5, -0.5, -0.5), # 3: bottom left back
+		Vector3(-0.5, 0.5, -0.5),  # 4: top left back
+		Vector3(-0.5, 0.5, 0.5),   # 5: top left front
+	]
+
+	# Apply Rotation and Position
+	for i in range(verts.size()):
+		# 1. Scale 
+		var v = verts[i] * size
+		
+		# 2. Rotate around the center (local 0,0,0)
+		v = rotation * v
+		
+		# 3. Move to the voxel's world center
+		verts[i] = v + center
+
+	# Define Faces (Triangle indices)
+	var triangles = [
+		# Bottom Face
+		[0, 2, 1],
+		[0, 3, 2],
+		# Sloped Face
+		[3, 5, 2],
+		[3, 4, 5],
+		# Vertical Face (Back)
+		[3, 4, 0],
+		# Vertical Face (Front)
+		[2, 5, 1],
+		# Vertical Face (Right side - the tall side)
+		[0, 4, 5],
+		[0, 5, 1],
+	]
+
+	for tri in triangles:
+		for idx in tri:
+			st.add_vertex(verts[idx])
+			
+			
+# This function is called by VoxelDatabase during Redo or Undo-Removal
+# This function is called by VoxelDatabase during Redo or Undo-Removal
+# This function is called by VoxelDatabase during Redo or Undo-Removal
+func restore_block_from_history(data: Dictionary):
+	var shape_type = data.shape_type
+	var grid_pos = data.grid_pos
+	var rotation = data.rotation
+	var color = data.color
+	
+	if VoxelDatabase.has_voxel(grid_pos):
+		print("⚠️ Skipping restore at ", grid_pos, ": Space is occupied.")
+		return
+	
+	var scene_to_spawn: PackedScene = null
+	
+	# Find the matching scene in our local array
+	for scene in block_scenes:
+		var s_name = scene.resource_path.get_file().get_basename().to_lower()
+		
+		# Match the string from the database to a scene in our list
+		if shape_type == "cube" and "cube" in s_name: scene_to_spawn = scene
+		elif shape_type == "brick" and "brick" in s_name: scene_to_spawn = scene
+		elif shape_type == "wedge" and "wedge" in s_name: scene_to_spawn = scene
+		elif shape_type == "corner_wedge" and "corner" in s_name: scene_to_spawn = scene
+		
+		if scene_to_spawn: break
+	
+	if scene_to_spawn == null:
+		print("❌ Error: Left Hand could not find scene for type:", shape_type)
+		return
+
+	# Instantiate
+	var obj = scene_to_spawn.instantiate()
+	var xr_origin = get_tree().root.get_node("Main/XROrigin3D") 
+	xr_origin.add_child(obj)
+	
+	# Correct World Position logic (Direct from grid)
+	var world_pos = VoxelDatabase.grid_to_world(grid_pos)
+	
+	# Apply transform
+	obj.global_transform = Transform3D(rotation, world_pos)
+	
+	# Apply Color
+	var mesh = obj.get_node_or_null("MeshInstance3D")
+	if mesh and mesh.has_method("set_color"):
+		mesh.set_color(color)
+		
+	# Freeze physics
+	if obj.has_method("set_sleeping"): obj.set_sleeping(true)
+	if obj is RigidBody3D: obj.freeze = true
+	
+	# Important: Tell database the block is back, but flag it as is_undo_redo 
+	VoxelDatabase.place_voxel(grid_pos, obj, shape_type, color, true)

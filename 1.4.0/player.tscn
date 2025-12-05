@@ -15,10 +15,18 @@
 
 [node name="XRCamera3D" type="XRCamera3D" parent="."]
 
-[node name="LeftHand" type="XRController3D" parent="."]
+[node name="LeftHand" type="XRController3D" parent="." node_paths=PackedStringArray("spawner_controller")]
 tracker = &"left_hand"
 script = ExtResource("1_2hs0m")
 pickable_scene = ExtResource("4_sweqy")
+spawn_distance = null
+spawner_controller = NodePath("../RightHand")
+spawn_action_name = null
+color_cycle_action_name = null
+export_action_name = null
+debug_logging = null
+block_scenes = Array[PackedScene]([ExtResource("6_1jxqw"), ExtResource("4_sweqy"), ExtResource("7_dw050"), ExtResource("8_b26j0"), ExtResource("9_n7ghd")])
+joystick_deadzone = null
 
 [node name="LeftHand" parent="LeftHand" instance=ExtResource("1_yu5ic")]
 

@@ -4,9 +4,9 @@
 [ext_resource type="ArrayMesh" uid="uid://cfvb7l4wjovhm" path="res://centered_corner_chamger.obj" id="2_5md0w"]
 [ext_resource type="Script" uid="uid://q0qsqmmn18iu" path="res://corner_mesh_instance_3d.gd" id="3_m2b17"]
 [ext_resource type="Script" uid="uid://dbxndn8lwhskb" path="res://collision_shape_3d_2.gd" id="4_c5u4n"]
-[ext_resource type="Script" uid="uid://dvyik02wqevaj" path="res://wedge.gd" id="5_tl1u7"]
+[ext_resource type="Script" uid="uid://df85pc0uymb7r" path="res://corner_voxel_logic.gd" id="5_8qpyi"]
 
-[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_tq68t"]
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_5md0w"]
 points = PackedVector3Array(-0.05, -0.05, -0.05, 0.05, -0.05, -0.05, -0.05, 0.05, -0.05, -0.05, -0.05, 0.05)
 
 [node name="Wedge" type="RigidBody3D"]
@@ -23,8 +23,8 @@ mesh = ExtResource("2_5md0w")
 script = ExtResource("3_m2b17")
 
 [node name="CollisionShape3D2" type="CollisionShape3D" parent="."]
-shape = SubResource("ConvexPolygonShape3D_tq68t")
+shape = SubResource("ConvexPolygonShape3D_5md0w")
 script = ExtResource("4_c5u4n")
 
 [node name="VoxelLogic" type="Node3D" parent="."]
-script = ExtResource("5_tl1u7")
+script = ExtResource("5_8qpyi")

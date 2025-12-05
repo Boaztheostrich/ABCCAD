@@ -1,8 +1,8 @@
 [gd_scene load_steps=6 format=3 uid="uid://q1gdg4owb74t"]
 
 [ext_resource type="Script" uid="uid://bs8x423e0qgit" path="res://addons/godot-xr-tools/objects/pickable.gd" id="1_dnrjj"]
+[ext_resource type="Script" uid="uid://dneu0audfda50" path="res://wedge_mesh_instance_3d.gd" id="2_g2vue"]
 [ext_resource type="Script" uid="uid://dvyik02wqevaj" path="res://wedge.gd" id="3_g2vue"]
-[ext_resource type="Script" uid="uid://bomau8ojivnh8" path="res://mesh_instance_3d.gd" id="4_1ckdc"]
 
 [sub_resource type="PrismMesh" id="PrismMesh_g2vue"]
 left_to_right = 0.0
@@ -21,7 +21,7 @@ metadata/_custom_type_script = "uid://bs8x423e0qgit"
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, 0, 0, 0)
 mesh = SubResource("PrismMesh_g2vue")
-script = ExtResource("4_1ckdc")
+script = ExtResource("2_g2vue")
 
 [node name="CollisionShape3D2" type="CollisionShape3D" parent="."]
 shape = SubResource("ConvexPolygonShape3D_y8ul7")

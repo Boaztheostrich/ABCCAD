@@ -65,7 +65,7 @@ func _on_grabbed(_by):
 	if obj is RigidBody3D: obj.freeze = false
 
 	for grid_pos in last_grid_positions:
-		VoxelDatabase.remove_voxel(grid_pos)
+		VoxelDatabase.remove_voxel(grid_pos, false, false)
 	last_grid_positions.clear()
 
 func _on_dropped(_by):
@@ -134,9 +134,14 @@ func _on_dropped(_by):
 	print("   🎯 Final center: ", snapped_center)
 	
 	# 8. Register
+	var mesh = obj.get_node_or_null("MeshInstance3D")
+	var current_color = Color.WHITE
+	if mesh and mesh.has_method("get_color"):
+		current_color = mesh.get_color()
+	
 	var shape_type = obj.get_meta("shape_type", "brick")
 	for grid_pos in new_grid_positions:
-		VoxelDatabase.place_voxel(grid_pos, obj, shape_type)
+		VoxelDatabase.place_voxel(grid_pos, obj, shape_type, current_color)
 	
 	last_grid_positions = new_grid_positions
 
