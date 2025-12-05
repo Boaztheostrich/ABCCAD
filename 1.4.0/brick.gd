@@ -1,12 +1,16 @@
 extends Node3D
 
 @export var voxel_size: float = 0.1
-@export var table_height: float = 1.0
 
+# --- BRICK DEFINITION (2x1 Block) ---
+# This is the only part that differs structurally from the Cube script
 @export var shape_offsets: Array[Vector3i] = [
 	Vector3i(0, 0, 0),
 	Vector3i(-1, 0, 0)
 ]
+
+# --- COOLDOWN (Prevents the jumpy physics loop) ---
+var _can_be_grabbed: bool = true
 
 var last_grid_positions: Array[Vector3i] = []
 var _all_orthogonal_bases: Array[Basis] = []
@@ -15,22 +19,17 @@ func _ready():
 	_generate_orthogonal_bases()
 	
 	var parent = get_parent()
-	print("Looking for signals on:", parent)
+	print("🧱 BRICK: Looking for signals on:", parent)
 	
 	if parent.has_signal("dropped"):
 		parent.connect("dropped", Callable(self, "_on_dropped"))
-		print("✅ Connected to dropped!")
 	elif parent.has_signal("released"):
 		parent.connect("released", Callable(self, "_on_dropped"))
-		print("✅ Connected to released!")
-	else:
-		print("❌ Couldn't find a 'drop' signal")
 	
 	if parent.has_signal("grabbed"):
 		parent.connect("grabbed", Callable(self, "_on_grabbed"))
-		print("✅ Connected to grabbed!")
 	
-	_print_debug_info("🟢 SPAWNED")
+	print("🧱 BRICK: ✅ Ready & Connected")
 
 func _generate_orthogonal_bases():
 	_all_orthogonal_bases.clear()
@@ -40,7 +39,6 @@ func _generate_orthogonal_bases():
 			if abs(forward.dot(up)) > 0.9: continue
 			var right = forward.cross(up).normalized()
 			_all_orthogonal_bases.append(Basis(right, up, -forward))
-	print("✅ Generated ", _all_orthogonal_bases.size(), " orthogonal bases")
 
 func find_closest_rotation(current_basis: Basis) -> Basis:
 	var best_basis = Basis.IDENTITY
@@ -57,61 +55,65 @@ func find_closest_rotation(current_basis: Basis) -> Basis:
 	
 	return best_basis
 
-func _on_grabbed(_by):
-	_print_debug_info("✊ GRABBED")
+# Updated to accept 2 arguments to match your XR system
+func _on_grabbed(_pickable, _by):
+	# --- COOLDOWN CHECK ---
+	if not _can_be_grabbed:
+		return
+	
+	print("🧱 BRICK: ✊ GRABBED")
 	
 	var obj = get_parent()
-	if obj.has_method("set_sleeping"): obj.set_sleeping(false)
-	if obj is RigidBody3D: obj.freeze = false
+	
+	# Unlock Physics
+	if obj is RigidBody3D:
+		obj.freeze = false
+		obj.sleeping = false
+	elif obj.has_method("set_sleeping"): 
+		obj.set_sleeping(false)
 
+	# Remove old voxels efficiently
 	for grid_pos in last_grid_positions:
 		VoxelDatabase.remove_voxel(grid_pos, false, false)
 	last_grid_positions.clear()
 
 func _on_dropped(_by):
-	_print_debug_info("✋ RELEASED (Before Snap)")
-	var obj = get_parent()
+	# --- START COOLDOWN (0.5 seconds) ---
+	_can_be_grabbed = false
+	get_tree().create_timer(0.5).timeout.connect(func(): _can_be_grabbed = true)
 	
-	print("   📦 Original shape_offsets: ", shape_offsets)
+	print("🧱 BRICK: ✋ RELEASED (Calculating Snap...)")
+	var obj = get_parent()
 	
 	# 1. Find Closest Rotation
 	var closest_basis = find_closest_rotation(obj.global_transform.basis)
-	print("   🔄 Closest basis X: ", closest_basis.x)
-	print("   🔄 Closest basis Y: ", closest_basis.y)
-	print("   🔄 Closest basis Z: ", closest_basis.z)
 	
-	# 2. Get Rotated Offsets and calculate dimensions
+	# 2. Get Rotated Offsets
 	var rotated_offsets = get_rotated_offsets(closest_basis)
-	print("   🔄 Rotated offsets: ", rotated_offsets)
 	
+	# 3. Calculate Dimensions (This changes based on rotation for a brick!)
 	var min_bounds = get_minimum_bounds(rotated_offsets)
 	var max_bounds = get_maximum_bounds(rotated_offsets)
 	var dimensions = max_bounds - min_bounds + Vector3i.ONE
-	print("   📐 Bounds - Min: ", min_bounds, " Max: ", max_bounds, " Dimensions: ", dimensions)
 	
-	# 3. Calculate the geometric center offset (in grid units)
+	# 4. Calculate geometric center offset
 	var center_offset = Vector3(min_bounds + max_bounds) / 2.0
-	print("   🎯 Center offset (grid units): ", center_offset)
 	
-	# 4. Snap the CENTER directly based on even/odd dimensions
+	# 5. Snap the CENTER (Handles Even vs Odd dimensions)
 	var drop_pos = obj.global_position
 	var snapped_center = snap_center_for_dimensions(drop_pos, dimensions)
-	print("   📍 Drop position: ", drop_pos)
-	print("   📍 Snapped center: ", snapped_center)
 	
-	# 5. Calculate grid positions from the snapped center
+	# 6. Calculate new grid positions
 	var new_grid_positions: Array[Vector3i] = []
 	for offset in rotated_offsets:
-		# Convert offset relative to center_offset, then add to snapped center grid
 		var relative_to_center = Vector3(offset) - center_offset
 		var world_pos = snapped_center + relative_to_center * voxel_size
 		var grid_pos = VoxelDatabase.world_to_grid(world_pos)
-		print("   🧱 Offset: ", offset, " -> relative: ", relative_to_center, " -> grid: ", grid_pos)
 		new_grid_positions.append(grid_pos)
 	
-	print("   ✅ Final grid positions: ", new_grid_positions)
+	print("🧱 BRICK: ✅ New Grid Positions: ", new_grid_positions)
 	
-	# 6. Clear Overlaps
+	# 7. Clear Overlaps (Prevents Z-Fighting)
 	var blocks_to_delete: Array[Node] = []
 	for grid_pos in new_grid_positions:
 		if VoxelDatabase.has_voxel(grid_pos):
@@ -122,18 +124,18 @@ func _on_dropped(_by):
 	
 	for block in blocks_to_delete:
 		for pos in VoxelDatabase.get_all_positions_for_object(block):
-			VoxelDatabase.remove_voxel(pos)
+			VoxelDatabase.remove_voxel(pos, false, false)
 		block.queue_free()
 
+	# Clean up any leftover positions from previous state
 	for grid_pos in last_grid_positions:
 		if grid_pos not in new_grid_positions:
-			VoxelDatabase.remove_voxel(grid_pos)
+			VoxelDatabase.remove_voxel(grid_pos, false, false)
 	
-	# 7. Apply Transform (center is already snapped correctly)
+	# 8. Apply Transform
 	obj.global_transform = Transform3D(closest_basis, snapped_center)
-	print("   🎯 Final center: ", snapped_center)
 	
-	# 8. Register
+	# 9. Register in Database
 	var mesh = obj.get_node_or_null("MeshInstance3D")
 	var current_color = Color.WHITE
 	if mesh and mesh.has_method("get_color"):
@@ -145,34 +147,31 @@ func _on_dropped(_by):
 	
 	last_grid_positions = new_grid_positions
 
-	# Lock Physics
-	if obj.has_method("set_linear_velocity"):
+	# 10. Lock Physics (HARD LOCK)
+	if obj is RigidBody3D:
+		obj.linear_velocity = Vector3.ZERO
+		obj.angular_velocity = Vector3.ZERO
+		obj.freeze = true
+	elif obj.has_method("set_linear_velocity"):
 		obj.set_linear_velocity(Vector3.ZERO)
 		obj.set_angular_velocity(Vector3.ZERO)
-	if obj.has_method("set_sleeping"):
-		obj.set_sleeping(true)
+		if obj.has_method("set_sleeping"):
+			obj.set_sleeping(true)
 		
-	_print_debug_info("🔒 SNAPPED & LOCKED")
+	print("🧱 BRICK: 🔒 SNAPPED & LOCKED at ", snapped_center)
 
-# NEW: Snap center based on whether each dimension is even or odd
+# --- THE MAGIC FUNCTION ---
+# Handles the difference between snapping a 1x1 (Odd) vs a 2x1 (Even) block
 func snap_center_for_dimensions(center: Vector3, dimensions: Vector3i) -> Vector3:
 	var snapped = Vector3.ZERO
 	
 	for i in range(3):
 		if dimensions[i] % 2 == 0:
-			# EVEN dimension: center should be at half-voxel positions (0.05, 0.15, 0.25...)
+			# EVEN dimension (2, 4...): Snap to half-voxel (0.05, 0.15)
 			snapped[i] = (floorf(center[i] / voxel_size) + 0.5) * voxel_size
 		else:
-			# ODD dimension: center should be at whole-voxel positions (0.0, 0.1, 0.2...)
+			# ODD dimension (1, 3...): Snap to whole-voxel (0.0, 0.1)
 			snapped[i] = roundf(center[i] / voxel_size) * voxel_size
-	
-	print("   📐 snap_center_for_dimensions:")
-	print("      Input: ", center)
-	print("      Dimensions: ", dimensions)
-	print("      Even/Odd: [", "even" if dimensions.x % 2 == 0 else "odd", ", ", 
-							  "even" if dimensions.y % 2 == 0 else "odd", ", ",
-							  "even" if dimensions.z % 2 == 0 else "odd", "]")
-	print("      Output: ", snapped)
 	
 	return snapped
 
@@ -200,21 +199,3 @@ func get_maximum_bounds(offsets: Array[Vector3i]) -> Vector3i:
 		max_bounds.y = maxi(max_bounds.y, offset.y)
 		max_bounds.z = maxi(max_bounds.z, offset.z)
 	return max_bounds
-
-func _print_debug_info(stage: String):
-	var obj = get_parent()
-	var basis = obj.global_transform.basis
-	var euler = basis.get_euler()
-	print("========================================")
-	print("📐 [BRICK DEBUG]: ", stage)
-	print("   Block Name: ", obj.name)
-	print("   Global Position: ", obj.global_position)
-	print("   --- ORIENTATION ---")
-	print("   Forward (Z): ", basis.z)
-	print("   Up (Y):      ", basis.y)
-	print("   Right (X):   ", basis.x)
-	print("   Rotation (Deg): ", Vector3(rad_to_deg(euler.x), rad_to_deg(euler.y), rad_to_deg(euler.z)))
-	print("   --- SHAPE ---")
-	print("   shape_offsets: ", shape_offsets)
-	print("   last_grid_positions: ", last_grid_positions)
-	print("========================================")
