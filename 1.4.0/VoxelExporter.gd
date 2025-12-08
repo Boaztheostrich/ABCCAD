@@ -55,6 +55,12 @@ func _export_voxels_to_stl():
 				"cube":
 					_add_cube_to_surface(st, world_pos, VoxelDatabase.voxel_size)
 					cube_count += 1
+				"brick": 
+					_add_cube_to_surface(st, world_pos, VoxelDatabase.voxel_size)
+					cube_count += 1
+				"m_cube":
+					_add_cube_to_surface(st, world_pos, VoxelDatabase.voxel_size)
+					cube_count += 1
 				"corner_wedge":
 					_add_corner_wedge_to_surface(st, world_pos, VoxelDatabase.voxel_size, voxel_data.rotation)
 					corner_wedge_count += 1
