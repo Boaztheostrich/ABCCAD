@@ -1,0 +1,134 @@
+[gd_scene load_steps=5 format=3 uid="uid://du1bkvyss0g0q"]
+
+[ext_resource type="Script" uid="uid://b60gribo4ef5g" path="res://menu_screen_0.gd" id="1_78iy7"]
+[ext_resource type="Script" uid="uid://bx8grwfe6aufn" path="res://export_to_stl.gd" id="2_78iy7"]
+[ext_resource type="Script" uid="uid://c13361snxe32j" path="res://save_button.gd" id="2_v4qkx"]
+[ext_resource type="Script" uid="uid://byqrsiq0vf7ou" path="res://load_button.gd" id="3_78iy7"]
+
+[node name="Control" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 128.0
+offset_bottom = 120.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_78iy7")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 768.0
+color = Color(0.4416943, 0.6726489, 1, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="ColorRect"]
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 768.0
+
+[node name="MainMenu" type="VBoxContainer" parent="ColorRect/MarginContainer"]
+visible = false
+layout_mode = 2
+alignment = 1
+
+[node name="Label" type="Label" parent="ColorRect/MarginContainer/MainMenu"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 80
+text = "Main Menu"
+horizontal_alignment = 1
+
+[node name="Export to STL" type="Button" parent="ColorRect/MarginContainer/MainMenu"]
+custom_minimum_size = Vector2(700, 200)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 100
+text = "Export to STL"
+icon_alignment = 1
+script = ExtResource("2_78iy7")
+
+[node name="Save Button" type="Button" parent="ColorRect/MarginContainer/MainMenu"]
+custom_minimum_size = Vector2(700, 200)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 100
+text = "Press to Save"
+icon_alignment = 1
+script = ExtResource("2_v4qkx")
+
+[node name="Load Button" type="Button" parent="ColorRect/MarginContainer/MainMenu"]
+custom_minimum_size = Vector2(700, 200)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 100
+text = "Press to Load
+"
+icon_alignment = 1
+script = ExtResource("3_78iy7")
+
+[node name="LoadMenu" type="Control" parent="ColorRect"]
+anchors_preset = 0
+offset_right = 1280.0
+offset_bottom = 768.0
+
+[node name="Panel" type="Panel" parent="ColorRect/LoadMenu"]
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 768.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ColorRect/LoadMenu"]
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 768.0
+
+[node name="Label" type="Label" parent="ColorRect/LoadMenu/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 80
+text = "Select a File"
+horizontal_alignment = 1
+
+[node name="HBoxContainer" type="HBoxContainer" parent="ColorRect/LoadMenu/VBoxContainer"]
+custom_minimum_size = Vector2(0, 500)
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="ColorRect/LoadMenu/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="FileList" type="VBoxContainer" parent="ColorRect/LoadMenu/VBoxContainer/HBoxContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ColorRect/LoadMenu/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+
+[node name="Scroll Up" type="Button" parent="ColorRect/LoadMenu/VBoxContainer/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+text = "UP"
+
+[node name="Scroll Down" type="Button" parent="ColorRect/LoadMenu/VBoxContainer/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+text = "DOWN"
+
+[node name="HBoxContainer2" type="HBoxContainer" parent="ColorRect/LoadMenu/VBoxContainer"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+alignment = 1
+
+[node name="Load Selected" type="Button" parent="ColorRect/LoadMenu/VBoxContainer/HBoxContainer2"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+text = "Load Selected"
+
+[node name="Delete" type="Button" parent="ColorRect/LoadMenu/VBoxContainer/HBoxContainer2"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+text = "Delete"
+
+[node name="Back" type="Button" parent="ColorRect/LoadMenu/VBoxContainer/HBoxContainer2"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+text = "Back"

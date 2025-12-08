@@ -77,7 +77,7 @@ func _on_grabbed(_pickable, _by):
 		VoxelDatabase.remove_voxel(grid_pos, false, false)
 	last_grid_positions.clear()
 
-func _on_dropped(_by):
+func _on_dropped(_by, is_redo: bool = false):
 	# --- START COOLDOWN (0.5 seconds) ---
 	_can_be_grabbed = false
 	get_tree().create_timer(0.5).timeout.connect(func(): _can_be_grabbed = true)
@@ -142,12 +142,28 @@ func _on_dropped(_by):
 		current_color = mesh.get_color()
 	
 	var shape_type = obj.get_meta("shape_type", "brick")
-	for grid_pos in new_grid_positions:
-		VoxelDatabase.place_voxel(grid_pos, obj, shape_type, current_color)
+
+	# CHANGE 2: Only start a batch if this is a NEW action (not a Redo)
+	if not is_redo:
+		VoxelDatabase.start_batch() 
+
+	# CHANGE 3: The Master/Follower Loop
+	for i in range(new_grid_positions.size()):
+		var grid_pos = new_grid_positions[i]
+		
+		# The first block in the list is the "Master"
+		var is_master_block = (i == 0)
+		
+		# place_voxel(pos, obj, type, color, IS_UNDO_REDO, IS_MASTER)
+		VoxelDatabase.place_voxel(grid_pos, obj, shape_type, current_color, is_redo, is_master_block)
+	
+	# CHANGE 4: Only end batch if this was a NEW action
+	if not is_redo:
+		VoxelDatabase.end_batch("place")
 	
 	last_grid_positions = new_grid_positions
 
-	# 10. Lock Physics (HARD LOCK)
+	# 10. Lock Physics
 	if obj is RigidBody3D:
 		obj.linear_velocity = Vector3.ZERO
 		obj.angular_velocity = Vector3.ZERO

@@ -1,7 +1,13 @@
 extends XRController3D
 
+@onready var my_pickup_function = $LeftHand/FunctionPickup
+
 @export var pickable_scene: PackedScene
 @export var spawn_distance: float = 0.0
+
+@export var menu_action_name: StringName = "menu_button"
+
+var _prev_menu_pressed := false
 
 @export var spawn_action_name: StringName = "ax_button" # A button (spawn)
 @export var color_cycle_action_name: StringName = "by_button" # B button (cycle color)
@@ -40,6 +46,11 @@ var _current_dir: int = 0 # 0 = Neutral, -1 = Left, 1 = Right
 func _ready():
 	await get_tree().process_frame
 	_ready_frame_passed = true
+	
+	VoxelDatabase.voxel_placed.connect(_on_global_voxel_placed)
+	
+		# ⭐ NEW: Listen for Load Game requests
+	SignalBus.request_rebuild_block.connect(_on_load_game_block_requested)
 
 	if debug_logging:
 		print("[XR] Controller ready:", name, 
@@ -47,6 +58,21 @@ func _ready():
 			" color_action=", color_cycle_action_name,
 			" export_action=", export_action_name)
 		print("[XR] Initial color:", current_color)
+		
+func _on_global_voxel_placed(grid_pos, obj):
+	if not is_instance_valid(obj): return
+	
+	# Check if we already connected to avoid duplicates
+	if obj.is_connected("grabbed", on_cube_grabbed):
+		return
+		
+	# Connect our local handlers
+	if obj.has_signal("grabbed"):
+			obj.grabbed.connect(on_cube_grabbed.bind(obj))
+	if obj.has_signal("released"):
+		obj.released.connect(on_cube_released.bind(obj))
+		
+	print("[XR] Hand connected to new/restored block: ", obj.name)
 
 
 func _process(delta: float) -> void:
@@ -65,6 +91,13 @@ func _process(delta: float) -> void:
 	var spawn_pressed := is_button_pressed(spawn_action_name)
 	var cycle_pressed := is_button_pressed(color_cycle_action_name)
 	var export_pressed := is_button_pressed(export_action_name)
+	var menu_pressed := is_button_pressed(menu_action_name)
+	
+	if menu_pressed and not _prev_menu_pressed:
+		print("[XR] Menu button pressed - Requesting Toggle")
+		SignalBus.request_toggle_menu.emit()
+		
+	_prev_menu_pressed = menu_pressed
 
 	# ALWAYS print B button state for debugging
 	if cycle_pressed:
@@ -259,30 +292,27 @@ func do_haptic_feedback():
 	print("🧩 [HAPTICS] Pulse sent successfully!")
 
 func on_cube_grabbed(pickable: Node, by: Node3D, grab_info: Object):
-	print("==================================================")
-	print("[HAPTIC DEBUG] on_cube_grabbed() function called!")
-	print("[HAPTIC DEBUG] Pickable:", pickable.name if pickable else "NULL")
-	print("[HAPTIC DEBUG] Grabbed by:", by.name if by else "NULL")
-	print("[HAPTIC DEBUG] Grab Info object:", grab_info)
-	do_haptic_feedback()
-	print("[HAPTIC DEBUG] Haptic feedback triggered on grab.")
-	print("==================================================")
+	# CRITICAL CHECK: Is the grabber ('by') actually THIS controller's pickup function?
+	if by != my_pickup_function:
+		return
 
+	print("==================================================")
+	print("[HAPTIC DEBUG] Grabbed by THIS controller: ", name)
+	
+	do_haptic_feedback()
 	held_cube = pickable
 
 func on_cube_released(pickable: Node, by: Node3D, grab_info: Object):
+	# CRITICAL CHECK
+	if by != my_pickup_function:
+		return
+
 	print("==================================================")
-	print("[HAPTIC DEBUG] on_cube_released() function called!")
-	print("[HAPTIC DEBUG] Pickable:", pickable.name if pickable else "NULL")
-	print("[HAPTIC DEBUG] Released by:", by.name if by else "NULL")
-	print("[HAPTIC DEBUG] Grab Info object:", grab_info)
+	print("[HAPTIC DEBUG] Released by THIS controller: ", name)
+	
 	do_haptic_feedback()
-	print("[HAPTIC DEBUG] Haptic feedback triggered on release.")
-	print("==================================================")
 
 	if held_cube == pickable:
-		if debug_logging:
-			print("[XR] Released cube.")
 		held_cube = null
 
 
@@ -524,8 +554,24 @@ func _add_wedge_to_surface(
 			st.add_vertex(verts[idx])
 			
 			
-# This function is called by VoxelDatabase during Redo or Undo-Removal
-# This function is called by VoxelDatabase during Redo or Undo-Removal
+# ⭐ NEW: Handler for SaveSystem loading
+func _on_load_game_block_requested(grid_pos: Vector3i, shape_type: String, rotation: Basis, color: Color):
+	# Calculate the exact world position for the block
+	# (We calculate this here because the save file stores grid coordinates, 
+	# but restore_block_from_history likes a 'world_origin' vector)
+	var world_pos = VoxelDatabase.grid_to_world(grid_pos)
+	
+	# Pack the data into the dictionary format that 'restore_block_from_history' expects
+	var data_packet = {
+		"grid_pos": grid_pos,
+		"shape_type": shape_type,
+		"rotation": rotation,
+		"color": color,
+		"world_origin": world_pos
+	}
+	
+	# Re-use your existing logic!
+	restore_block_from_history(data_packet)
 # This function is called by VoxelDatabase during Redo or Undo-Removal
 func restore_block_from_history(data: Dictionary):
 	var shape_type = data.shape_type
@@ -533,26 +579,45 @@ func restore_block_from_history(data: Dictionary):
 	var rotation = data.rotation
 	var color = data.color
 	
+	print("🔄 REDO REQUEST: Type='", shape_type, "' at ", grid_pos)
+
 	if VoxelDatabase.has_voxel(grid_pos):
-		print("⚠️ Skipping restore at ", grid_pos, ": Space is occupied.")
-		return
+		# Double check: Is it ACTUALLY occupied by a valid object?
+		var blocking_obj = VoxelDatabase.get_voxel(grid_pos)
+		if is_instance_valid(blocking_obj):
+			print("⚠️ Skipping restore at ", grid_pos, ": Space is occupied by ", blocking_obj)
+			return
+		else:
+			print("⚠️ Found Zombie node at ", grid_pos, " - Proceeding with overwrite.")
 	
 	var scene_to_spawn: PackedScene = null
 	
-	# Find the matching scene in our local array
+	# DEBUG: Print what we are looking for
+	# print("   Looking for matching scene in block_scenes...")
+	
 	for scene in block_scenes:
-		var s_name = scene.resource_path.get_file().get_basename().to_lower()
+		var s_path = scene.resource_path.get_file().get_basename().to_lower()
 		
-		# Match the string from the database to a scene in our list
-		if shape_type == "cube" and "cube" in s_name: scene_to_spawn = scene
-		elif shape_type == "brick" and "brick" in s_name: scene_to_spawn = scene
-		elif shape_type == "wedge" and "wedge" in s_name: scene_to_spawn = scene
-		elif shape_type == "corner_wedge" and "corner" in s_name: scene_to_spawn = scene
+		# DEBUG: Check what we are comparing against
+		# print("   ? Checking against: ", s_path)
+		if shape_type == "m_cube" and "m_cube" in s_path: 
+			scene_to_spawn = scene
+		elif shape_type == "cube" and "cube" in s_path: 
+			scene_to_spawn = scene
+		elif shape_type == "brick" and "brick" in s_path: 
+			scene_to_spawn = scene
+		elif shape_type == "wedge" and "wedge" in s_path: 
+			scene_to_spawn = scene
+		elif shape_type == "corner_wedge" and "corner" in s_path: 
+			scene_to_spawn = scene
 		
-		if scene_to_spawn: break
+		if scene_to_spawn: 
+			print("   ✅ Found Match: ", s_path)
+			break
 	
 	if scene_to_spawn == null:
-		print("❌ Error: Left Hand could not find scene for type:", shape_type)
+		print("❌ CRITICAL ERROR: Could not find a scene for shape_type: '", shape_type, "'")
+		print("   Available scenes:", block_scenes)
 		return
 
 	# Instantiate
@@ -560,11 +625,13 @@ func restore_block_from_history(data: Dictionary):
 	var xr_origin = get_tree().root.get_node("Main/XROrigin3D") 
 	xr_origin.add_child(obj)
 	
-	# Correct World Position logic (Direct from grid)
-	var world_pos = VoxelDatabase.grid_to_world(grid_pos)
-	
-	# Apply transform
-	obj.global_transform = Transform3D(rotation, world_pos)
+	if data.has("world_origin") and data.world_origin != Vector3.ZERO:
+		# Teleport exactly to where it was
+		obj.global_transform = Transform3D(rotation, data.world_origin)
+	else:
+		# Fallback for old saves
+		var world_pos = VoxelDatabase.grid_to_world(grid_pos)
+		obj.global_transform = Transform3D(rotation, world_pos)
 	
 	# Apply Color
 	var mesh = obj.get_node_or_null("MeshInstance3D")
@@ -575,5 +642,24 @@ func restore_block_from_history(data: Dictionary):
 	if obj.has_method("set_sleeping"): obj.set_sleeping(true)
 	if obj is RigidBody3D: obj.freeze = true
 	
-	# Important: Tell database the block is back, but flag it as is_undo_redo 
-	VoxelDatabase.place_voxel(grid_pos, obj, shape_type, color, true)
+	# --- INTERNAL LOGIC CALL ---
+	var is_complex_block = (shape_type == "brick" or shape_type == "m_cube")
+	
+	if is_complex_block:
+		print("   ⚡ Triggering internal logic for COMPLEX block...")
+		# Check root first, then children
+		var script_target = obj
+		if not obj.has_method("_on_dropped"):
+			for child in obj.get_children():
+				if child.has_method("_on_dropped"):
+					script_target = child
+					break
+		
+		if script_target.has_method("_on_dropped"):
+			script_target._on_dropped(null, true) # Call with is_redo=true
+		else:
+			print("   ❌ ERROR: Object is marked 'brick' but has no _on_dropped method found!")
+			
+	else:
+		print("   ℹ️ Simple block restore (Cube/Wedge).")
+		VoxelDatabase.place_voxel(grid_pos, obj, shape_type, color, true, true)

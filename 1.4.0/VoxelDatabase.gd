@@ -10,20 +10,31 @@ signal voxel_removed(grid_pos: Vector3i)
 # --- UNDO/REDO STACKS ---
 var undo_stack: Array = []
 var redo_stack: Array = []
-const MAX_UNDO_STEPS = 50
+const MAX_UNDO_STEPS = 250
+
+# --- BATCH TRANSACTION STATE ---
+var _current_batch: Array = []
+var _is_batching: bool = false
 
 # --- DATA CLASS ---
 class VoxelData:
 	var object: Node3D
 	var shape_type: String
 	var rotation: Basis
-	var color: Color # <--- Added Color Storage
+	var color: Color
+	var is_master: bool
+	var origin_pos: Vector3
 
-	func _init(obj: Node3D, type: String, rot: Basis, col: Color):
+	func _init(obj: Node3D, type: String, rot: Basis, col: Color, master: bool = true):
 		object = obj
 		shape_type = type
 		rotation = rot
 		color = col
+		is_master = master
+		if is_instance_valid(obj):
+			origin_pos = obj.global_position
+		else:
+			origin_pos = Vector3.ZERO
 
 # -------- POSITION HELPERS --------
 func world_to_grid(world_pos: Vector3) -> Vector3i:
@@ -39,96 +50,175 @@ func grid_to_world(grid_pos: Vector3i) -> Vector3:
 		grid_pos.y * voxel_size,
 		grid_pos.z * voxel_size
 	)
+	
+	
+# Add this helper to VoxelDatabase.gd
+func _remove_all_references_to_object(obj: Node):
+	# We have to scan the grid. 
+	# (Optimization: In a real game, you'd store a reverse lookup dict, but this is fine for now)
+	var keys_to_remove = []
+	
+	for pos in voxel_grid:
+		var data = voxel_grid[pos]
+		# Check if it refers to the same object instance
+		if data.object == obj:
+			keys_to_remove.append(pos)
+			
+	for pos in keys_to_remove:
+		voxel_grid.erase(pos)
+		print("🧹 Cleaned up child voxel at ", pos)
+
+# -------- BATCHING FUNCTIONS (NEW) --------
+
+func start_batch():
+	_is_batching = true
+	_current_batch.clear()
+
+func end_batch(action_type: String = "place"):
+	_is_batching = false
+	if _current_batch.is_empty():
+		return
+	
+	# Commit the whole batch as one Undo Step
+	# We store a copy of the array so subsequent batches don't overwrite it
+	var batch_entry = {
+		"action": action_type,
+		"items": _current_batch.duplicate()
+	}
+	
+	undo_stack.append(batch_entry)
+	if undo_stack.size() > MAX_UNDO_STEPS:
+		undo_stack.pop_front()
+	
+	# Clear redo stack on new action
+	redo_stack.clear()
+	_current_batch.clear()
 
 # -------- GRID FUNCTIONS --------
 
-# ⭐ UPDATED SIGNATURE: Now accepts Color and UndoFlag
-func place_voxel(grid_pos: Vector3i, obj: Node3D, shape_type: String = "cube", color: Color = Color.WHITE, is_undo_redo: bool = false):
+func place_voxel(grid_pos: Vector3i, obj: Node3D, shape_type: String = "cube", color: Color = Color.WHITE, is_undo_redo: bool = false, is_master: bool = true):
 	var rotation = obj.global_transform.basis
-	var data = VoxelData.new(obj, shape_type, rotation, color)
+	var data = VoxelData.new(obj, shape_type, rotation, color, is_master)
 	
 	voxel_grid[grid_pos] = data
-	print("📍 Voxel placed at grid:", grid_pos, " type:", shape_type)
 	voxel_placed.emit(grid_pos, obj)
 	
 	if not is_undo_redo:
-		# If this is a new user action, clear redo stack and add to undo
-		redo_stack.clear()
-		_record_action("place", grid_pos, shape_type, rotation, color)
+		if is_master:
+			var entry = {
+				"grid_pos": grid_pos,
+				"shape_type": shape_type,
+				"rotation": rotation,
+				"color": color,
+				"world_origin": obj.global_position # <--- NEW: Record exact location
+			}
+			
+			if _is_batching:
+				_current_batch.append(entry)
+			else:
+				start_batch()
+				_current_batch.append(entry)
+				end_batch("place")
 
-# ⭐ UPDATED SIGNATURE: Now accepts UndoFlag
-# VoxelDatabase.gd
-
-# ⭐ UPDATED SIGNATURE: Added 'destroy_object' parameter (defaults to true)
 func remove_voxel(grid_pos: Vector3i, is_undo_redo: bool = false, destroy_object: bool = true):
 	if voxel_grid.has(grid_pos):
 		var data = voxel_grid[grid_pos]
+		var target_obj = data.object # Reference to the actual node
 		
+		# Record Undo step BEFORE deleting
 		if not is_undo_redo:
-			_record_action("remove", grid_pos, data.shape_type, data.rotation, data.color)
-			
-		voxel_grid.erase(grid_pos)
-		print("🗑️ Removed voxel:", grid_pos)
+			var entry = {
+				"grid_pos": grid_pos,
+				"shape_type": data.shape_type,
+				"rotation": data.rotation,
+				"color": data.color,
+				"world_origin": data.origin_pos
+			}
+			if _is_batching:
+				_current_batch.append(entry)
+			else:
+				start_batch()
+				_current_batch.append(entry)
+				end_batch("remove")
+		
+		# ⭐ NEW CLEANUP LOGIC ⭐
+		if is_instance_valid(target_obj):
+			# If we are deleting a Multi-Voxel object, we must remove ALL its grid entries
+			# otherwise they become Zombies and block future placement.
+			_remove_all_references_to_object(target_obj)
+		else:
+			# Fallback if object is already dead (zombie cleanup)
+			voxel_grid.erase(grid_pos)
+
 		voxel_removed.emit(grid_pos)
 		
-		# ⭐ FIX IS HERE: Only destroy if explicitly asked
-		if destroy_object and is_instance_valid(data.object):
-			data.object.queue_free()
+		if destroy_object:
+			if is_instance_valid(target_obj):
+				target_obj.queue_free()
 
 # -------- UNDO / REDO SYSTEM --------
-
-func _record_action(action: String, pos: Vector3i, type: String, rot: Basis, col: Color):
-	var entry = {
-		"action": action,
-		"grid_pos": pos,
-		"shape_type": type,
-		"rotation": rot,
-		"color": col
-	}
-	undo_stack.append(entry)
-	if undo_stack.size() > MAX_UNDO_STEPS:
-		undo_stack.pop_front() 
 
 func perform_undo(spawner_script: Node):
 	if undo_stack.is_empty():
 		print("Nothing to undo.")
 		return
 		
-	var last_action = undo_stack.pop_back()
-	redo_stack.append(last_action)
+	var last_batch = undo_stack.pop_back()
+	redo_stack.append(last_batch) # Move entire batch to redo
 	
-	print("Undoing:", last_action.action)
+	print("Undoing Batch:", last_batch.action, " with ", last_batch.items.size(), " items")
 	
-	if last_action.action == "place":
-		# Undo placement = Remove it
-		remove_voxel(last_action.grid_pos, true)
+	var items = last_batch.items
+	
+	# IMPORTANT: Reverse iteration for Undo is usually safer 
+	# (Imagine building a tower: Undo must remove top block first)
+	# items.reverse() # Optional, but good practice
+	
+	if last_batch.action == "place":
+		for item in items:
+			# Undo placement = Remove it
+			remove_voxel(item.grid_pos, true, true)
 		
-	elif last_action.action == "remove":
-		# Undo removal = Put it back
-		spawner_script.restore_block_from_history(last_action)
+	elif last_batch.action == "remove":
+		for item in items:
+			# Undo removal = Put it back
+			spawner_script.restore_block_from_history(item)
 
 func perform_redo(spawner_script: Node):
 	if redo_stack.is_empty():
 		print("Nothing to redo.")
 		return
 		
-	var next_action = redo_stack.pop_back()
-	undo_stack.append(next_action)
+	var next_batch = redo_stack.pop_back()
+	undo_stack.append(next_batch)
 	
-	print("Redoing:", next_action.action)
+	print("Redoing Batch:", next_batch.action)
 	
-	if next_action.action == "place":
-		# Redo placement = Put it back
-		spawner_script.restore_block_from_history(next_action)
+	var items = next_batch.items
+	
+	if next_batch.action == "place":
+		for item in items:
+			# Redo placement = Put it back
+			spawner_script.restore_block_from_history(item)
 		
-	elif next_action.action == "remove":
-		# Redo removal = Remove it again
-		remove_voxel(next_action.grid_pos, true)
+	elif next_batch.action == "remove":
+		for item in items:
+			# Redo removal = Remove it again
+			remove_voxel(item.grid_pos, true, true)
 
 # -------- GETTERS --------
 func get_voxel(grid_pos: Vector3i) -> Node3D:
 	var data = voxel_grid.get(grid_pos)
-	return data.object if data else null
+	
+	if data and is_instance_valid(data.object):
+		return data.object
+	
+	# If we found data but the object is dead, clean up the mess!
+	if data and not is_instance_valid(data.object):
+		print("⚠️ VoxelDatabase found a zombie node at ", grid_pos, ". Cleaning it up.")
+		voxel_grid.erase(grid_pos)
+		
+	return null
 
 func get_voxel_data(grid_pos: Vector3i) -> VoxelData:
 	return voxel_grid.get(grid_pos)

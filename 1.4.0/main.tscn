@@ -1,10 +1,15 @@
-[gd_scene load_steps=16 format=3 uid="uid://cxcd00vlo3a7e"]
+[gd_scene load_steps=25 format=3 uid="uid://cxcd00vlo3a7e"]
 
 [ext_resource type="PackedScene" uid="uid://clc5dre31iskm" path="res://addons/godot-xr-tools/xr/start_xr.tscn" id="1_0xm2m"]
 [ext_resource type="Script" uid="uid://70tj7o1n80ve" path="res://main.gd" id="1_lquwl"]
 [ext_resource type="PackedScene" uid="uid://bry03y103465e" path="res://player.tscn" id="2_0xm2m"]
 [ext_resource type="PackedScene" uid="uid://c8l60rnugru40" path="res://addons/godot-xr-tools/objects/pickable.tscn" id="3_h2yge"]
 [ext_resource type="Script" uid="uid://b5vvsxj3jnk1r" path="res://node_3d.gd" id="4_1bvp3"]
+[ext_resource type="PackedScene" uid="uid://clujaf3u776a3" path="res://addons/godot-xr-tools/objects/viewport_2d_in_3d.tscn" id="6_272bh"]
+[ext_resource type="PackedScene" uid="uid://du1bkvyss0g0q" path="res://Menu_screen_0.tscn" id="7_5vw27"]
+[ext_resource type="Script" uid="uid://j1nqelwxtydq" path="res://VoxelExporter.gd" id="8_5vw27"]
+[ext_resource type="Script" uid="uid://vimpp2ycf7jm" path="res://MenuManager.gd" id="9_kek77"]
+[ext_resource type="Script" uid="uid://baaftru1uij0i" path="res://SaveSystem.gd" id="10_4c57u"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_0xm2m"]
 sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
@@ -40,6 +45,24 @@ subdivide_width = 1
 points = PackedVector3Array(0.05, 0.05, 0.05, 0.05, -0.05, 0.05, 0.05, 0.05, -0.05, -0.05, 0.05, 0.05, 0.05, -0.05, -0.05, -0.05, -0.05, 0.05, -0.05, 0.05, -0.05, -0.05, -0.05, -0.05)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1bvp3"]
+
+[sub_resource type="QuadMesh" id="QuadMesh_4c57u"]
+resource_local_to_scene = true
+size = Vector2(1280, 768)
+
+[sub_resource type="ViewportTexture" id="ViewportTexture_efxa6"]
+viewport_path = NodePath("Viewport2Din3D/Viewport")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_4c57u"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_texture = SubResource("ViewportTexture_efxa6")
+texture_filter = 1
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ycdy4"]
+resource_local_to_scene = true
+size = Vector3(1280, 768, 0.02)
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_lquwl")
@@ -100,3 +123,46 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9057908, 3.838169)
 
 [node name="OmniLight3D2" type="OmniLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.7250285, 0.79847336, 0)
+
+[node name="Viewport2Din3D" parent="." node_paths=PackedStringArray("main_menu_container", "load_menu_container", "file_list_container") instance=ExtResource("6_272bh")]
+transform = Transform3D(0.001, 0, 0, 0, 0.001, 0, 0, 0, 0.001, 0, 1.0714897, -1.2321987)
+screen_size = Vector2(1280, 768)
+collision_layer = 5242880
+scene = ExtResource("7_5vw27")
+viewport_size = Vector2(1280, 768)
+input_gamepad = true
+unshaded = true
+scene_properties_keys = PackedStringArray("menu_screen_0.gd", "Containers", "main_menu_container", "load_menu_container", "file_list_container")
+main_menu_container = NodePath("Viewport/Control/ColorRect/MarginContainer/MainMenu")
+load_menu_container = NodePath("Viewport/Control/ColorRect/LoadMenu/VBoxContainer")
+file_list_container = NodePath("Viewport/Control/ColorRect/LoadMenu/VBoxContainer/HBoxContainer/ScrollContainer/FileList")
+
+[node name="Viewport" parent="Viewport2Din3D" index="0"]
+size = Vector2i(1280, 768)
+
+[node name="Screen" parent="Viewport2Din3D" index="1"]
+mesh = SubResource("QuadMesh_4c57u")
+surface_material_override/0 = SubResource("StandardMaterial3D_4c57u")
+
+[node name="StaticBody3D" parent="Viewport2Din3D" index="2"]
+collision_layer = 5242880
+screen_size = Vector2(1280, 768)
+viewport_size = Vector2(1280, 768)
+
+[node name="CollisionShape3D" parent="Viewport2Din3D/StaticBody3D" index="0"]
+shape = SubResource("BoxShape3D_ycdy4")
+
+[node name="Node" type="Node" parent="."]
+script = ExtResource("8_5vw27")
+
+[node name="Node2" type="Node" parent="." node_paths=PackedStringArray("menu_root", "xr_camera", "pointers")]
+script = ExtResource("9_kek77")
+menu_root = NodePath("../Viewport2Din3D")
+xr_camera = NodePath("../XROrigin3D/XRCamera3D")
+pointers = [NodePath("../XROrigin3D/LeftHand/LeftHand/FunctionPointer"), NodePath("../XROrigin3D/RightHand/RightHand/FunctionPointer")]
+
+[node name="SaveSystem" type="Node" parent="."]
+script = ExtResource("10_4c57u")
+
+[editable path="XROrigin3D"]
+[editable path="Viewport2Din3D"]

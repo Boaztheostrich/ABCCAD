@@ -1,5 +1,7 @@
 extends XRController3D
 
+@onready var my_pickup_function = $RightHand/FunctionPickup
+
 @export var pickable_scene: PackedScene
 @export var spawn_distance: float = 0.0
 
@@ -34,6 +36,9 @@ const EXPORT_COOLDOWN_TIME: float = 1.5  # Prevent accidental double-exports
 func _ready():
 	await get_tree().process_frame
 	_ready_frame_passed = true
+	
+
+	VoxelDatabase.voxel_placed.connect(_on_global_voxel_placed)
 
 	if debug_logging:
 		print("[XR] Controller ready:", name, 
@@ -41,6 +46,21 @@ func _ready():
 			" color_action=", color_cycle_action_name,
 			" export_action=", export_action_name)
 		print("[XR] Initial color:", current_color)
+		
+func _on_global_voxel_placed(grid_pos, obj):
+	if not is_instance_valid(obj): return
+	
+	# Check if we already connected to avoid duplicates
+	if obj.is_connected("grabbed", on_cube_grabbed):
+		return
+		
+	# Connect our local handlers
+	if obj.has_signal("grabbed"):
+			obj.grabbed.connect(on_cube_grabbed.bind(obj))
+	if obj.has_signal("released"):
+		obj.released.connect(on_cube_released.bind(obj))
+		
+	print("[XR] Hand connected to new/restored block: ", obj.name)
 
 
 func _process(delta: float) -> void:
@@ -87,8 +107,8 @@ func _process(delta: float) -> void:
 		_cycle_color()
 
 	# Handle export (Trigger)
-	if export_pressed and not _prev_export_pressed:
-		_on_trigger_pressed()
+	#if export_pressed and not _prev_export_pressed:
+		#_on_trigger_pressed()
 
 	# Remember button states
 	_prev_spawn_pressed = spawn_pressed
@@ -158,19 +178,22 @@ func _spawn_cube():
 		return
 
 	# ⭐ NEW: Detect the shape type from the scene name
+# ⭐ UPDATED: Detect the shape type including BRICK
 	var shape_type = "cube"
 	var scene_name = scene_to_use.resource_path.get_file().get_basename().to_lower()
 	
-	if "wedge" in scene_name or "triangle" in scene_name:
+	if "brick" in scene_name:       # <--- ADD THIS
+		shape_type = "brick"
+	elif "wedge" in scene_name or "triangle" in scene_name:
 		shape_type = "wedge"
 	elif "corner" in scene_name:
 		shape_type = "corner_wedge"
+	elif "m_cube" in scene_name:
+		shape_type = "m_cube"
 	
 	# Store that info inside the node
 	cube.set_meta("shape_type", shape_type)
 	print("[XR] DEBUG: Spawning shape type:", shape_type)
-
-	print("[XR] DEBUG: Cube instantiated, type:", cube.get_class())
 	
 	# Spawn relative to controller
 	var controller_basis := global_transform.basis
@@ -246,42 +269,41 @@ func do_haptic_feedback():
 	print("🧩 [HAPTICS] Pulse sent successfully!")
 
 func on_cube_grabbed(pickable: Node, by: Node3D, grab_info: Object):
+	# ⭐ ROBUST CHECK: Is the grabber ('by') MY pickup function?
+	if by != my_pickup_function:
+		# It was grabbed by the other hand
+		return
+
 	print("==================================================")
 	print("[HAPTIC DEBUG] on_cube_grabbed() function called!")
-	print("[HAPTIC DEBUG] Pickable:", pickable.name if pickable else "NULL")
-	print("[HAPTIC DEBUG] Grabbed by:", by.name if by else "NULL")
-	print("[HAPTIC DEBUG] Grab Info object:", grab_info)
+	print("[HAPTIC DEBUG] Controller:", name)
+	
 	do_haptic_feedback()
-	print("[HAPTIC DEBUG] Haptic feedback triggered on grab.")
-	print("==================================================")
-
 	held_cube = pickable
 
 func on_cube_released(pickable: Node, by: Node3D, grab_info: Object):
+	# ⭐ ROBUST CHECK
+	if by != my_pickup_function:
+		return
+
 	print("==================================================")
-	print("[HAPTIC DEBUG] on_cube_released() function called!")
-	print("[HAPTIC DEBUG] Pickable:", pickable.name if pickable else "NULL")
-	print("[HAPTIC DEBUG] Released by:", by.name if by else "NULL")
-	print("[HAPTIC DEBUG] Grab Info object:", grab_info)
+	print("[HAPTIC DEBUG] on_cube_released() by ", name)
+	
 	do_haptic_feedback()
-	print("[HAPTIC DEBUG] Haptic feedback triggered on release.")
-	print("==================================================")
 
 	if held_cube == pickable:
-		if debug_logging:
-			print("[XR] Released cube.")
 		held_cube = null
 
 
 # --- STL EXPORT ---
-func _on_trigger_pressed():
-	if export_cooldown > 0:
-		print("⏳ Export on cooldown, wait", snappedf(export_cooldown, 0.1), "seconds...")
-		return
-	
-	print("🎯 Right trigger pressed - starting export!")
-	_export_voxels_to_stl()
-	export_cooldown = EXPORT_COOLDOWN_TIME
+#func _on_trigger_pressed():
+	#if export_cooldown > 0:
+		#print("⏳ Export on cooldown, wait", snappedf(export_cooldown, 0.1), "seconds...")
+		#return
+	#
+	#print("🎯 Right trigger pressed - starting export!")
+	#_export_voxels_to_stl()
+	#export_cooldown = EXPORT_COOLDOWN_TIME
 
 
 func _export_voxels_to_stl():

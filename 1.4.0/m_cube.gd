@@ -70,7 +70,6 @@ func find_closest_rotation(current_basis: Basis) -> Basis:
 			best_basis = candidate
 	return best_basis
 
-# FIXED: Accepts 2 arguments to match XR Tools signal signature
 func _on_grabbed(_pickable, _by):
 	# --- COOLDOWN CHECK ---
 	if not _can_be_grabbed:
@@ -92,79 +91,103 @@ func _on_grabbed(_pickable, _by):
 		VoxelDatabase.remove_voxel(grid_pos, false, false)
 	last_grid_positions.clear()
 
-func _on_dropped(_by):
+# ⭐ UPDATED: Added is_redo flag logic to prevent shifting
+func _on_dropped(_by, is_redo: bool = false):
 	# --- START COOLDOWN (0.5 seconds) ---
 	_can_be_grabbed = false
 	get_tree().create_timer(0.5).timeout.connect(func(): _can_be_grabbed = true)
 	
-	print("📐 M_CUBE: ✋ RELEASED (Calculating Snap...)")
+	print("📐 M_CUBE: ✋ RELEASED (Calculating Snap...) Is Redo: ", is_redo)
 	var obj = get_parent()
 	
-	# 1. Find Closest Rotation
-	var closest_basis = find_closest_rotation(obj.global_transform.basis)
-	
-	# 2. Get Rotated Offsets
-	var rotated_offsets = get_rotated_offsets(closest_basis)
-	
-	# 3. Calculate Dimensions
-	var min_bounds = get_minimum_bounds(rotated_offsets)
-	var max_bounds = get_maximum_bounds(rotated_offsets)
-	
-	# Recalculate dimensions based on current rotation
-	var current_dims = max_bounds - min_bounds + Vector3i.ONE
-	
-	# 4. Calculate geometric center offset
-	var center_offset = Vector3(min_bounds + max_bounds) / 2.0
-	
-	# 5. Snap the CENTER (Handles Even vs Odd dimensions)
-	var drop_pos = obj.global_position
-	var snapped_center = snap_center_for_dimensions(drop_pos, current_dims)
-	
-	# 6. Calculate new grid positions
+	var snapped_center: Vector3
 	var new_grid_positions: Array[Vector3i] = []
-	for offset in rotated_offsets:
-		var relative_to_center = Vector3(offset) - center_offset
-		var world_pos = snapped_center + relative_to_center * voxel_size
-		var grid_pos = VoxelDatabase.world_to_grid(world_pos)
-		new_grid_positions.append(grid_pos)
+	var closest_basis: Basis
 	
+	# --- 1. CALCULATE POSITIONS ---
+	
+	if is_redo:
+		# ⭐ REDO PATH: Trust the position set by Undo System ⭐
+		# Do NOT re-snap, or it will shift if not perfectly aligned with grid center logic
+		snapped_center = obj.global_position
+		closest_basis = obj.global_transform.basis
+		
+		# We still need to calculate occupied grid cells based on this position
+		var rotated_offsets = get_rotated_offsets(closest_basis)
+		var min_bounds = get_minimum_bounds(rotated_offsets)
+		var max_bounds = get_maximum_bounds(rotated_offsets)
+		var center_offset = Vector3(min_bounds + max_bounds) / 2.0
+		
+		for offset in rotated_offsets:
+			var relative_to_center = Vector3(offset) - center_offset
+			var world_pos = snapped_center + relative_to_center * voxel_size
+			var grid_pos = VoxelDatabase.world_to_grid(world_pos)
+			new_grid_positions.append(grid_pos)
+			
+	else:
+		# ⭐ NORMAL DROP PATH: Calculate Snap ⭐
+		closest_basis = find_closest_rotation(obj.global_transform.basis)
+		
+		var rotated_offsets = get_rotated_offsets(closest_basis)
+		var min_bounds = get_minimum_bounds(rotated_offsets)
+		var max_bounds = get_maximum_bounds(rotated_offsets)
+		var current_dims = max_bounds - min_bounds + Vector3i.ONE
+		var center_offset = Vector3(min_bounds + max_bounds) / 2.0
+		
+		# Snap the CENTER
+		var drop_pos = obj.global_position
+		snapped_center = snap_center_for_dimensions(drop_pos, current_dims)
+		
+		# Calculate new grid positions
+		for offset in rotated_offsets:
+			var relative_to_center = Vector3(offset) - center_offset
+			var world_pos = snapped_center + relative_to_center * voxel_size
+			var grid_pos = VoxelDatabase.world_to_grid(world_pos)
+			new_grid_positions.append(grid_pos)
+
 	print("📐 M_CUBE: ✅ New Grid Positions Size: ", new_grid_positions.size())
 	
-	# 7. Clear Overlaps
-	var blocks_to_delete: Array[Node] = []
+	# --- 2. CLEAR OVERLAPS ---
+	
+	# Force cleanup of zombie nodes to prevent "Space Occupied" errors
 	for grid_pos in new_grid_positions:
 		if VoxelDatabase.has_voxel(grid_pos):
-			var existing_block = VoxelDatabase.get_voxel(grid_pos)
-			if existing_block != obj and is_instance_valid(existing_block):
-				if existing_block not in blocks_to_delete:
-					blocks_to_delete.append(existing_block)
-	
-	for block in blocks_to_delete:
-		for pos in VoxelDatabase.get_all_positions_for_object(block):
-			VoxelDatabase.remove_voxel(pos, false, false)
-		block.queue_free()
+			# True = destroy existing object there
+			VoxelDatabase.remove_voxel(grid_pos, false, true)
 
-	# Clean up leftovers
+	# Clean up leftovers from previous position
 	for grid_pos in last_grid_positions:
 		if grid_pos not in new_grid_positions:
 			VoxelDatabase.remove_voxel(grid_pos, false, false)
 	
-	# 8. Apply Transform
-	obj.global_transform = Transform3D(closest_basis, snapped_center)
+	# --- 3. APPLY TRANSFORM ---
+	# Only apply transform if NOT Redo (Redo sets it externally)
+	if not is_redo:
+		obj.global_transform = Transform3D(closest_basis, snapped_center)
 	
-	# 9. Register
+	# --- 4. REGISTER IN DATABASE ---
 	var mesh = obj.get_node_or_null("MeshInstance3D")
 	var current_color = Color.WHITE
 	if mesh and mesh.has_method("get_color"):
 		current_color = mesh.get_color()
 	
 	var shape_type = obj.get_meta("shape_type", "m_cube")
-	for grid_pos in new_grid_positions:
-		VoxelDatabase.place_voxel(grid_pos, obj, shape_type, current_color)
+	
+	if not is_redo:
+		VoxelDatabase.start_batch() 
+
+	for i in range(new_grid_positions.size()):
+		var grid_pos = new_grid_positions[i]
+		var is_master_block = (i == 0) # Index 0 is Master
+		
+		VoxelDatabase.place_voxel(grid_pos, obj, shape_type, current_color, is_redo, is_master_block)
+	
+	if not is_redo:
+		VoxelDatabase.end_batch("place")
 	
 	last_grid_positions = new_grid_positions
 
-	# 10. Lock Physics (HARD LOCK)
+	# --- 5. LOCK PHYSICS ---
 	if obj is RigidBody3D:
 		obj.linear_velocity = Vector3.ZERO
 		obj.angular_velocity = Vector3.ZERO

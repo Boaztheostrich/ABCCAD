@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://bry03y103465e"]
+[gd_scene load_steps=12 format=3 uid="uid://bry03y103465e"]
 
 [ext_resource type="Script" uid="uid://c5tkjvl47mgia" path="res://left_hand.gd" id="1_2hs0m"]
 [ext_resource type="PackedScene" uid="uid://bq86r4yll8po" path="res://addons/godot-xr-tools/hands/scenes/lowpoly/left_fullglove_low.tscn" id="1_yu5ic"]
@@ -10,27 +10,25 @@
 [ext_resource type="PackedScene" uid="uid://q1gdg4owb74t" path="res://wedge.tscn" id="7_dw050"]
 [ext_resource type="PackedScene" uid="uid://e1jjbvifbn3q" path="res://m_cube.tscn" id="8_b26j0"]
 [ext_resource type="PackedScene" uid="uid://wsk8byls04qi" path="res://Corner_piece.tscn" id="9_n7ghd"]
+[ext_resource type="PackedScene" uid="uid://cqhw276realc" path="res://addons/godot-xr-tools/functions/function_pointer.tscn" id="9_nvl01"]
 
 [node name="XROrigin3D" type="XROrigin3D"]
 
 [node name="XRCamera3D" type="XRCamera3D" parent="."]
 
-[node name="LeftHand" type="XRController3D" parent="." node_paths=PackedStringArray("spawner_controller")]
+[node name="LeftHand" type="XRController3D" parent="."]
 tracker = &"left_hand"
 script = ExtResource("1_2hs0m")
 pickable_scene = ExtResource("4_sweqy")
-spawn_distance = null
-spawner_controller = NodePath("../RightHand")
-spawn_action_name = null
-color_cycle_action_name = null
-export_action_name = null
-debug_logging = null
 block_scenes = Array[PackedScene]([ExtResource("6_1jxqw"), ExtResource("4_sweqy"), ExtResource("7_dw050"), ExtResource("8_b26j0"), ExtResource("9_n7ghd")])
-joystick_deadzone = null
 
 [node name="LeftHand" parent="LeftHand" instance=ExtResource("1_yu5ic")]
 
 [node name="FunctionPickup" parent="LeftHand/LeftHand" instance=ExtResource("2_i3pqv")]
+
+[node name="FunctionPointer" parent="LeftHand/LeftHand" instance=ExtResource("9_nvl01")]
+show_laser = 2
+laser_length = 1
 
 [node name="RightHand" type="XRController3D" parent="."]
 tracker = &"right_hand"
@@ -40,3 +38,7 @@ block_scenes = Array[PackedScene]([ExtResource("6_1jxqw"), ExtResource("4_sweqy"
 [node name="RightHand" parent="RightHand" instance=ExtResource("2_ojcpv")]
 
 [node name="FunctionPickup" parent="RightHand/RightHand" instance=ExtResource("2_i3pqv")]
+
+[node name="FunctionPointer" parent="RightHand/RightHand" instance=ExtResource("9_nvl01")]
+show_laser = 2
+laser_length = 1

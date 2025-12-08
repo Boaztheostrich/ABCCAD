@@ -70,7 +70,7 @@ func _on_grabbed(_pickable, _by):
 		VoxelDatabase.remove_voxel(grid_pos, false, false)
 	last_grid_positions.clear()
 
-func _on_dropped(_by):
+func _on_dropped(_by, _is_redo: bool = false):
 	# --- START COOLDOWN (0.5 seconds) ---
 	_can_be_grabbed = false
 	get_tree().create_timer(0.5).timeout.connect(func(): _can_be_grabbed = true)
