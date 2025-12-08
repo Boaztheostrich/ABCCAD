@@ -8,7 +8,10 @@ signal request_load_game(filename: String) # Accepts filename to load
 signal request_toggle_menu(menu_name: String)
 
 # NEW: Used by SaveSystem to tell the Main Game to spawn a block
-signal request_rebuild_block(grid_pos: Vector3i, shape_type: String, rotation: Basis, color: Color)
+# Old line:
+# signal request_rebuild_block(grid_pos: Vector3i, shape_type: String, rotation: Basis, color: Color)
 
+# NEW line (Add 'exact_pos'):
+signal request_rebuild_block(grid_pos: Vector3i, shape_type: String, rotation: Basis, color: Color, exact_pos: Vector3)
 func _ready():
 	print("🚌 SIGNAL BUS: I am ready and listening for traffic.")

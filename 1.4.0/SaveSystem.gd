@@ -13,45 +13,44 @@ func _ready():
 
 func _save_game(filename_override: String = ""):
 	var filename = filename_override
-	
-	# If no name provided, generate timestamp
 	if filename == "":
 		filename = "save_" + Time.get_datetime_string_from_system().replace(":", "-") + ".json"
-	
-	# Make sure it ends in .json
 	if not filename.ends_with(".json"):
 		filename += ".json"
-		
 	var full_path = SAVE_DIR + filename
 	
 	# 1. GATHER DATA
-	# We want an array of dictionaries.
 	var save_data = []
 	var grid_keys = VoxelDatabase.get_all_voxels()
 	
 	for grid_pos in grid_keys:
 		var data = VoxelDatabase.get_voxel_data(grid_pos)
 		
-		# Only save "Master" blocks. 
-		# If a block is 2x2, we only save the origin, not the 3 ghost blocks.
-		if data.is_master:
-			var item = {
-				"x": grid_pos.x,
-				"y": grid_pos.y,
-				"z": grid_pos.z,
-				"type": data.shape_type,
-				"col": data.color.to_html(), # Convert Color to Hex String
-				# Serialize Basis (Rotation) as an array of 9 floats
-				"rot": [
-					data.rotation.x.x, data.rotation.x.y, data.rotation.x.z,
-					data.rotation.y.x, data.rotation.y.y, data.rotation.y.z,
-					data.rotation.z.x, data.rotation.z.y, data.rotation.z.z
-				]
-			}
-			save_data.append(item)
+		# SAVE EVERYTHING (Masters and Children)
+		var item = {
+			"x": grid_pos.x,
+			"y": grid_pos.y,
+			"z": grid_pos.z,
+			"type": data.shape_type,
+			"col": data.color.to_html(),
+			"is_master": data.is_master, # <--- NEW: Save this flag
+			# We save origin_pos so children can find their master's location if needed
+			"origin_x": data.origin_pos.x,
+			"origin_y": data.origin_pos.y,
+			"origin_z": data.origin_pos.z,
+			"rot": [
+				data.rotation.x.x, data.rotation.x.y, data.rotation.x.z,
+				data.rotation.y.x, data.rotation.y.y, data.rotation.y.z,
+				data.rotation.z.x, data.rotation.z.y, data.rotation.z.z
+			]
+		}
+		save_data.append(item)
 			
+	# Sort to keep file consistent (optional, but nice)
+	save_data.sort_custom(func(a, b): return a.y < b.y)
+
 	# 2. WRITE TO FILE
-	var json_string = JSON.stringify(save_data, "\t") # \t makes it readable
+	var json_string = JSON.stringify(save_data, "\t")
 	var file = FileAccess.open(full_path, FileAccess.WRITE)
 	
 	if file:
@@ -64,7 +63,6 @@ func _save_game(filename_override: String = ""):
 
 func _load_game(filename: String):
 	var full_path = SAVE_DIR + filename
-	
 	if not FileAccess.file_exists(full_path):
 		print("❌ Save file not found: ", full_path)
 		return
@@ -76,52 +74,89 @@ func _load_game(filename: String):
 	
 	var json = JSON.new()
 	var error = json.parse(content)
-	
 	if error != OK:
 		print("❌ JSON Parse Error: ", json.get_error_message())
 		return
 		
 	var loaded_data = json.data
-	if typeof(loaded_data) != TYPE_ARRAY:
-		print("❌ Invalid save file format")
-		return
 
-	print("📂 Loading ", loaded_data.size(), " blocks...")
+	print("📂 Loading ", loaded_data.size(), " voxels...")
 
 	# 2. CLEAR CURRENT WORLD
 	_clear_world()
-
-	# 3. RECONSTRUCT BLOCKS
-	# We need to turn off batching momentarily or treat this as one huge batch
-	# Generally, you clear the Undo stack when loading a new game.
+	
+	# Clear Undo/Redo stacks on load
 	VoxelDatabase.undo_stack.clear()
 	VoxelDatabase.redo_stack.clear()
 
+	# 3. FIRST PASS: SPAWN MASTERS
+	# We need to spawn the physical objects first so the children have something to point to.
+	
+	# Dictionary to store reference to the spawned Node3D objects using origin position as key
+	# Key: String(Vector3), Value: Node3D
+	var master_registry = {} 
+
 	for item in loaded_data:
-		var pos = Vector3i(item.x, item.y, item.z)
-		var type = item.type
-		var color = Color.html(item.col)
-		
-		# Reconstruct Basis
-		var r = item.rot
-		var basis = Basis(
-			Vector3(r[0], r[1], r[2]),
-			Vector3(r[3], r[4], r[5]),
-			Vector3(r[6], r[7], r[8])
-		)
-		
-		# 🚨 CRITICAL STEP:
-		# The SaveSystem doesn't know how to spawn scenes.
-		# We must ask the Main Scene (where your spawner logic is) to do it.
-		SignalBus.request_rebuild_block.emit(pos, type, basis, color)
+		if item.is_master:
+			var pos = Vector3i(item.x, item.y, item.z)
+			var type = item.type
+			var color = Color.html(item.col)
+			var basis = Basis(
+				Vector3(item.rot[0], item.rot[1], item.rot[2]),
+				Vector3(item.rot[3], item.rot[4], item.rot[5]),
+				Vector3(item.rot[6], item.rot[7], item.rot[8])
+			)
+			
+			# ⭐ RECONSTRUCT THE VECTOR3 HERE
+			var exact_origin = Vector3(item.origin_x, item.origin_y, item.origin_z)
+			
+			# Pass it to the signal
+			SignalBus.request_rebuild_block.emit(pos, type, basis, color, exact_origin)
+			
+			# Signal LeftHand to spawn the object
+			SignalBus.request_rebuild_block.emit(pos, type, basis, color)
+			
+			# Wait a tiny bit for the object to be registered? 
+			# No, SignalBus is immediate in this case, but we need to grab the object 
+			# directly from the Database because 'rebuild_block' spawns and places it.
+			var spawned_obj = VoxelDatabase.get_voxel(pos)
+			
+			if spawned_obj:
+				# Use the string version for keys, but we sent the real Vector3 above
+				var origin_key = str(exact_origin.round()) 
+				master_registry[origin_key] = spawned_obj
+
+	# 4. SECOND PASS: REGISTER CHILDREN
+	# Now we fill in the gaps. Since 'request_rebuild_block' spawns the Master 
+	# and calls 'place_voxel', the master slot is already filled. 
+	# We just need to manually place the child slots.
+	
+	for item in loaded_data:
+		if not item.is_master:
+			var grid_pos = Vector3i(item.x, item.y, item.z)
+			var origin_key = str(Vector3(item.origin_x, item.origin_y, item.origin_z).round())
+			
+			var master_obj = master_registry.get(origin_key)
+			
+			if master_obj:
+				var type = item.type
+				var color = Color.html(item.col)
+				var basis = Basis(
+					Vector3(item.rot[0], item.rot[1], item.rot[2]),
+					Vector3(item.rot[3], item.rot[4], item.rot[5]),
+					Vector3(item.rot[6], item.rot[7], item.rot[8])
+				)
+				
+				# Manually register the child without spawning a new mesh
+				# We pass 'false' for is_master
+				VoxelDatabase.place_voxel(grid_pos, master_obj, type, color, true, false)
+			else:
+				print("⚠️ Orphan child voxel found at ", grid_pos)
 
 	print("✅ Load Complete!")
 
 func _clear_world():
-	# Iterate backwards through keys to avoid modification issues, 
-	# though VoxelDatabase.remove_voxel handles this safely.
 	var all_voxels = VoxelDatabase.get_all_voxels()
 	for pos in all_voxels:
-		# Use internal removal to skip undo history logging during clear
 		VoxelDatabase.remove_voxel(pos, true, true)
 	print("🧹 World cleared.")

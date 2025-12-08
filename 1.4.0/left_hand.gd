@@ -555,25 +555,26 @@ func _add_wedge_to_surface(
 			
 			
 # ⭐ NEW: Handler for SaveSystem loading
-func _on_load_game_block_requested(grid_pos: Vector3i, shape_type: String, rotation: Basis, color: Color):
-	# Calculate the exact world position for the block
-	# (We calculate this here because the save file stores grid coordinates, 
-	# but restore_block_from_history likes a 'world_origin' vector)
-	var world_pos = VoxelDatabase.grid_to_world(grid_pos)
+func _on_load_game_block_requested(grid_pos: Vector3i, shape_type: String, rotation: Basis, color: Color, exact_pos: Vector3):
 	
-	# Pack the data into the dictionary format that 'restore_block_from_history' expects
+	# We use the exact_pos passed from the save file
+	# This makes the data packet IDENTICAL to the Undo/Redo packet!
 	var data_packet = {
 		"grid_pos": grid_pos,
 		"shape_type": shape_type,
 		"rotation": rotation,
 		"color": color,
-		"world_origin": world_pos
+		"world_origin": exact_pos  # <--- USING THE SAVED "PHOTO" DATA
 	}
 	
+	# Pass 'true' because we are loading
+	restore_block_from_history(data_packet, true)
+	#var world_pos = VoxelDatabase.grid_to_world(grid_pos)
+
+	
 	# Re-use your existing logic!
-	restore_block_from_history(data_packet)
 # This function is called by VoxelDatabase during Redo or Undo-Removal
-func restore_block_from_history(data: Dictionary):
+func restore_block_from_history(data: Dictionary, is_loading_from_file: bool = false):
 	var shape_type = data.shape_type
 	var grid_pos = data.grid_pos
 	var rotation = data.rotation
@@ -625,13 +626,21 @@ func restore_block_from_history(data: Dictionary):
 	var xr_origin = get_tree().root.get_node("Main/XROrigin3D") 
 	xr_origin.add_child(obj)
 	
+	# --- DEBUGGING POSITION ---
+	print("--- RESTORE DEBUG ---")
+	print("Target Grid Pos: ", grid_pos)
+	
 	if data.has("world_origin") and data.world_origin != Vector3.ZERO:
-		# Teleport exactly to where it was
+		print("✅ Using Exact Saved World Origin: ", data.world_origin)
+		# Force the transform directly
 		obj.global_transform = Transform3D(rotation, data.world_origin)
 	else:
-		# Fallback for old saves
-		var world_pos = VoxelDatabase.grid_to_world(grid_pos)
-		obj.global_transform = Transform3D(rotation, world_pos)
+		var calc_pos = VoxelDatabase.grid_to_world(grid_pos)
+		print("⚠️ Using Calculated Grid->World: ", calc_pos)
+		obj.global_transform = Transform3D(rotation, calc_pos)
+
+	# CHECK AFTER PLACEMENT
+	print("ACTUAL Object Pos after placement: ", obj.global_position)
 	
 	# Apply Color
 	var mesh = obj.get_node_or_null("MeshInstance3D")
@@ -655,10 +664,17 @@ func restore_block_from_history(data: Dictionary):
 					script_target = child
 					break
 		
+		# ... inside if is_complex_block: ...
+	
 		if script_target.has_method("_on_dropped"):
-			script_target._on_dropped(null, true) # Call with is_redo=true
-		else:
-			print("   ❌ ERROR: Object is marked 'brick' but has no _on_dropped method found!")
+			if is_loading_from_file:
+				print("   📂 LOADING: Skipping _on_dropped re-calculation. Trusting save file.")
+				# We still need to register the master voxel manually here because we skipped _on_dropped
+				VoxelDatabase.place_voxel(grid_pos, obj, shape_type, color, true, true)
+			else:
+				# THIS IS FOR UNDO/REDO (Keep original logic)
+				print("   🔄 UNDO/REDO: Recalculating via _on_dropped...")
+				script_target._on_dropped(null, true)
 			
 	else:
 		print("   ℹ️ Simple block restore (Cube/Wedge).")
