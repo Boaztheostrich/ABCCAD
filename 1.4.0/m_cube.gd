@@ -150,12 +150,20 @@ func _on_dropped(_by, is_redo: bool = false):
 	# --- 2. CLEAR OVERLAPS ---
 	
 	# Force cleanup of zombie nodes to prevent "Space Occupied" errors
+	var overlap_found := false
 	for grid_pos in new_grid_positions:
 		if VoxelDatabase.has_voxel(grid_pos):
-			# True = destroy existing object there
-			VoxelDatabase.remove_voxel(grid_pos, false, true)
+			var existing_block := VoxelDatabase.get_voxel(grid_pos)
+			if existing_block != obj and is_instance_valid(existing_block):
+				overlap_found = true
+				break
 
-	# Clean up leftovers from previous position
+	if overlap_found:
+		print("📐 M_CUBE: ❌ Placement blocked – space already occupied. Deleting M_CUBE.")
+		obj.queue_free()
+		return
+
+	# Clean up leftovers from previous position (old cells not in the new footprint)
 	for grid_pos in last_grid_positions:
 		if grid_pos not in new_grid_positions:
 			VoxelDatabase.remove_voxel(grid_pos, false, false)

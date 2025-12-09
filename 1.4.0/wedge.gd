@@ -111,19 +111,20 @@ func _on_dropped(_by):
 	
 	print("🔺 WEDGE: ✅ New Grid Positions: ", new_grid_positions)
 	
-	# 7. Clear Overlaps (Prevent Z-Fighting)
-	var blocks_to_delete: Array[Node] = []
+
+	# 7. CHECK FOR OVERLAP BEFORE PLACING
+	var overlap_found := false
 	for grid_pos in new_grid_positions:
 		if VoxelDatabase.has_voxel(grid_pos):
-			var existing_block = VoxelDatabase.get_voxel(grid_pos)
+			var existing_block := VoxelDatabase.get_voxel(grid_pos)
 			if existing_block != obj and is_instance_valid(existing_block):
-				if existing_block not in blocks_to_delete:
-					blocks_to_delete.append(existing_block)
-	
-	for block in blocks_to_delete:
-		for pos in VoxelDatabase.get_all_positions_for_object(block):
-			VoxelDatabase.remove_voxel(pos, false, false)
-		block.queue_free()
+				overlap_found = true
+				break
+
+	if overlap_found:
+		print("🔺 WEDGE: ❌ Placement blocked – space already occupied. Deleting wedge.")
+		obj.queue_free()
+		return
 
 	# Clean up leftovers
 	for grid_pos in last_grid_positions:

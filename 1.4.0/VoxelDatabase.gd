@@ -222,9 +222,45 @@ func get_voxel(grid_pos: Vector3i) -> Node3D:
 
 func get_voxel_data(grid_pos: Vector3i) -> VoxelData:
 	return voxel_grid.get(grid_pos)
+	
+# Add this to VoxelDatabase.gd
+
+# Forcefully removes this specific object instance from the entire grid
+func cleanup_object_references(obj: Node):
+	var positions_to_clear = []
+	
+	# Scan the grid for any reference to this object
+	for pos in voxel_grid:
+		var data = voxel_grid[pos]
+		# Check if it's the exact same instance OR if the instance is already dead
+		if data.object == obj or (is_instance_valid(obj) and data.object == null):
+			positions_to_clear.append(pos)
+	
+	# Remove them
+	for pos in positions_to_clear:
+		# Pass destroy_object=false because we are holding it, not deleting it!
+		remove_voxel(pos, false, false)
+		print("🧹 Cleaned up DESYNCED voxel at ", pos)
 
 func has_voxel(grid_pos: Vector3i) -> bool:
-	return voxel_grid.has(grid_pos)
+	# 1. If the key doesn't exist, it's definitely empty.
+	if not voxel_grid.has(grid_pos):
+		return false
+		
+	# 2. The key exists. Let's check the data.
+	var data = voxel_grid[grid_pos]
+	
+	# 3. Check if the object is actually alive
+	if is_instance_valid(data.object) and not data.object.is_queued_for_deletion():
+		return true
+	
+	# 4. FOUND A ZOMBIE! 🧟
+	# The key exists, but the object is dead/null.
+	# Clean it up automatically so the user can build here.
+	print("🧟 VoxelDatabase: Auto-cleaned zombie voxel at ", grid_pos)
+	voxel_grid.erase(grid_pos)
+	
+	return false
 
 func get_all_voxels() -> Array:
 	return voxel_grid.keys()

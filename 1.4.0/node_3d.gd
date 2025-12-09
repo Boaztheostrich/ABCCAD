@@ -103,22 +103,22 @@ func _on_dropped(_by, _is_redo: bool = false):
 		var world_pos = snapped_center + relative_to_center * voxel_size
 		var grid_pos = VoxelDatabase.world_to_grid(world_pos)
 		new_grid_positions.append(grid_pos)
-	
+
 	print("   ✅ Final grid positions: ", new_grid_positions)
-	
-	# 6. Clear Overlaps
-	var blocks_to_delete: Array[Node] = []
+
+	# 6. CHECK FOR OVERLAP BEFORE PLACING
+	var overlap_found := false
 	for grid_pos in new_grid_positions:
 		if VoxelDatabase.has_voxel(grid_pos):
-			var existing_block = VoxelDatabase.get_voxel(grid_pos)
+			var existing_block := VoxelDatabase.get_voxel(grid_pos)
 			if existing_block != obj and is_instance_valid(existing_block):
-				if existing_block not in blocks_to_delete:
-					blocks_to_delete.append(existing_block)
-	
-	for block in blocks_to_delete:
-		for pos in VoxelDatabase.get_all_positions_for_object(block):
-			VoxelDatabase.remove_voxel(pos, false, false)
-		block.queue_free()
+				overlap_found = true
+				break
+
+	if overlap_found:
+		print("🔲 CUBE: ❌ Placement blocked – space already occupied. Deleting cube.")
+		obj.queue_free()
+		return
 
 	for grid_pos in last_grid_positions:
 		if grid_pos not in new_grid_positions:
