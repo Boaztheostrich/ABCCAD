@@ -1,0 +1,69 @@
+[gd_scene load_steps=2 format=3 uid="uid://fdreoxypf1nx"]
+
+[ext_resource type="Script" uid="uid://bqivldspah5dj" path="res://tutorial_ui.gd" id="1_evibi"]
+
+[node name="Control" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 128.0
+offset_bottom = 120.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_evibi")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 768.0
+color = Color(0.4416943, 0.6726489, 1, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="ColorRect"]
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 768.0
+
+[node name="MainMenu" type="VBoxContainer" parent="ColorRect/MarginContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="Label" type="Label" parent="ColorRect/MarginContainer/MainMenu"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 80
+text = "Welcome to ABCCAD!!!"
+horizontal_alignment = 1
+
+[node name="RichTextLabel" type="RichTextLabel" parent="ColorRect/MarginContainer/MainMenu"]
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 40
+text = "It is as easy as ABC
+Step A: Press A on the right controller (bottom button)
+Step B: Grip with the right controller to catch the block as it falls
+Step C: Press B (top button) to change the color
+Step D: Place the block anywhere around you!
+You can use the menu button on the left hand controller to:
+save, load, and export to .STL. STL's are saved in downloads.
+The right joystick switches block types, explore them all!
+The left joystick is for undo / redo"
+fit_content = true
+horizontal_alignment = 1
+
+[node name="HBoxContainer" type="HBoxContainer" parent="ColorRect/MarginContainer/MainMenu"]
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="CloseButton" type="Button" parent="ColorRect/MarginContainer/MainMenu/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 80
+text = "Close
+"
+icon_alignment = 1
+
+[node name="NeverShowButton" type="Button" parent="ColorRect/MarginContainer/MainMenu/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 60
+text = "Never Show Again"
+icon_alignment = 1

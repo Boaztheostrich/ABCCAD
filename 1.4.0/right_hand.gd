@@ -2,6 +2,9 @@ extends XRController3D
 
 @onready var my_pickup_function = $RightHand/FunctionPickup
 
+
+@export var hand_material: StandardMaterial3D
+
 @export var pickable_scene: PackedScene
 @export var spawn_distance: float = 0.0
 
@@ -47,6 +50,9 @@ func _ready():
 			" export_action=", export_action_name)
 		print("[XR] Initial color:", current_color)
 		
+		
+	_update_hand_color()
+		
 func _on_global_voxel_placed(grid_pos, obj):
 	if not is_instance_valid(obj): return
 	
@@ -61,6 +67,24 @@ func _on_global_voxel_placed(grid_pos, obj):
 		obj.released.connect(on_cube_released.bind(obj))
 		
 	print("[XR] Hand connected to new/restored block: ", obj.name)
+	
+func _update_hand_color():
+	print("[XR] Updating hand color to:", current_color)
+	print("[XR] Hand material:", hand_material)
+	if hand_material == null:
+		return
+
+	if hand_material is StandardMaterial3D:
+		var sm := hand_material as StandardMaterial3D
+		sm.albedo_color = current_color
+
+	#elif hand_material is ShaderMaterial:
+		#var sh := hand_material as ShaderMaterial
+		# Try common parameter names – adjust to your shader
+		#if "albedo_color" in sh.get_shader().get_param_list():
+			#sh.set_shader_parameter("albedo_color", current_color)
+		#elif "color" in sh.get_shader().get_param_list():
+			#sh.set_shader_parameter("color", current_color)
 
 
 func _process(delta: float) -> void:
@@ -152,6 +176,10 @@ func _switch_block_type(direction: int):
 	
 	# Optional: Add haptic feedback
 	trigger_haptic_pulse("haptic", 0, 0.3, 0.1, 0)
+	
+	# ⭐ NEW: Broadcast current block index to other systems (e.g. left hand)
+
+	SignalBus.block_type_changed.emit(current_block_index)
 
 
 # --- Spawning cubes ---
@@ -257,6 +285,8 @@ func _cycle_color():
 			print("[XR] DEBUG: Held cube children:", held_cube.get_children())
 	else:
 		print("[XR] DEBUG: No held cube to change color")
+		
+	_update_hand_color()  # <<< add this
 
 	if debug_logging:
 		print("[XR] Color cycled to:", current_color)

@@ -5,6 +5,8 @@ extends XRController3D
 @export var pickable_scene: PackedScene
 @export var spawn_distance: float = 0.0
 
+@export var hand_material: StandardMaterial3D
+
 @export var menu_action_name: StringName = "menu_button"
 
 var _prev_menu_pressed := false
@@ -51,6 +53,8 @@ func _ready():
 	
 		# ⭐ NEW: Listen for Load Game requests
 	SignalBus.request_rebuild_block.connect(_on_load_game_block_requested)
+	
+	SignalBus.block_type_changed.connect(_on_block_type_changed)
 
 	if debug_logging:
 		print("[XR] Controller ready:", name, 
@@ -58,6 +62,19 @@ func _ready():
 			" color_action=", color_cycle_action_name,
 			" export_action=", export_action_name)
 		print("[XR] Initial color:", current_color)
+		
+	_update_hand_color()
+		
+func _update_hand_color():
+	if hand_material == null:
+		return
+	hand_material.albedo_color = current_color
+	
+func _on_block_type_changed(new_index: int):
+	# Right hand drives the index; left hand just mirrors it
+	current_block_index = clamp(new_index, 0, block_scenes.size() - 1)
+	if debug_logging:
+		print("[XR][Left] Synced block index from right hand:", current_block_index)
 		
 func _on_global_voxel_placed(grid_pos, obj):
 	if not is_instance_valid(obj): return
@@ -280,6 +297,8 @@ func _cycle_color():
 			print("[XR] DEBUG: Held cube children:", held_cube.get_children())
 	else:
 		print("[XR] DEBUG: No held cube to change color")
+		
+	_update_hand_color()
 
 	if debug_logging:
 		print("[XR] Color cycled to:", current_color)

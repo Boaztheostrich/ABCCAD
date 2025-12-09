@@ -28,7 +28,6 @@ offset_right = 1280.0
 offset_bottom = 768.0
 
 [node name="MainMenu" type="VBoxContainer" parent="ColorRect/MarginContainer"]
-visible = false
 layout_mode = 2
 alignment = 1
 
