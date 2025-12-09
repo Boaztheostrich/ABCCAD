@@ -1,10 +1,22 @@
-[gd_scene load_steps=6 format=3 uid="uid://q1gdg4owb74t"]
+[gd_scene load_steps=9 format=3 uid="uid://q1gdg4owb74t"]
 
 [ext_resource type="Script" uid="uid://bs8x423e0qgit" path="res://addons/godot-xr-tools/objects/pickable.gd" id="1_dnrjj"]
+[ext_resource type="Shader" uid="uid://bpivrpeq37sq5" path="res://claude.gdshader" id="2_dnrjj"]
 [ext_resource type="Script" uid="uid://dneu0audfda50" path="res://wedge_mesh_instance_3d.gd" id="2_g2vue"]
 [ext_resource type="Script" uid="uid://dvyik02wqevaj" path="res://wedge.gd" id="3_g2vue"]
+[ext_resource type="Texture2D" uid="uid://cpcvmys4agybk" path="res://2px.png" id="3_ukds7"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_8xvcu"]
+render_priority = 0
+shader = ExtResource("2_dnrjj")
+shader_parameter/albedo_texture = ExtResource("3_ukds7")
+shader_parameter/replace_color = Color(0.8509804, 0, 0, 1)
+shader_parameter/threshold = 0.1
+shader_parameter/uv1_scale = Vector3(3, 2, 1)
+shader_parameter/edge_smoothness = 0.02
 
 [sub_resource type="PrismMesh" id="PrismMesh_g2vue"]
+material = SubResource("ShaderMaterial_8xvcu")
 left_to_right = 0.0
 
 [sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_y8ul7"]

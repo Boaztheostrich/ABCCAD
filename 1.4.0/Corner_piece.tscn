@@ -1,10 +1,68 @@
-[gd_scene load_steps=7 format=3 uid="uid://wsk8byls04qi"]
+[gd_scene load_steps=17 format=3 uid="uid://wsk8byls04qi"]
 
 [ext_resource type="Script" uid="uid://bs8x423e0qgit" path="res://addons/godot-xr-tools/objects/pickable.gd" id="1_8qpyi"]
-[ext_resource type="ArrayMesh" uid="uid://cfvb7l4wjovhm" path="res://centered_corner_chamger.obj" id="2_5md0w"]
+[ext_resource type="Shader" uid="uid://bpivrpeq37sq5" path="res://claude.gdshader" id="3_c5u4n"]
 [ext_resource type="Script" uid="uid://q0qsqmmn18iu" path="res://corner_mesh_instance_3d.gd" id="3_m2b17"]
+[ext_resource type="Texture2D" uid="uid://bwjub2xqjq80h" path="res://mesh0 mesh1 mesh4 and more (1) (2).png" id="3_tl1u7"]
+[ext_resource type="ArrayMesh" uid="uid://ddolsatmd78hf" path="res://obj_with_uv_cords.obj" id="4_5ohxu"]
 [ext_resource type="Script" uid="uid://dbxndn8lwhskb" path="res://collision_shape_3d_2.gd" id="4_c5u4n"]
+[ext_resource type="Texture2D" uid="uid://cpcvmys4agybk" path="res://2px.png" id="4_tl1u7"]
 [ext_resource type="Script" uid="uid://df85pc0uymb7r" path="res://corner_voxel_logic.gd" id="5_8qpyi"]
+[ext_resource type="Texture2D" uid="uid://cemwxby8wl2gf" path="res://mesh0 mesh1 mesh4 and more (1).png" id="6_kuhu5"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_mng0w"]
+render_priority = 0
+shader = ExtResource("3_c5u4n")
+shader_parameter/albedo_texture = ExtResource("3_tl1u7")
+shader_parameter/replace_color = Color(0, 0.5, 1, 1)
+shader_parameter/threshold = 0.1
+shader_parameter/uv1_scale = Vector3(1, 1, 1)
+shader_parameter/edge_smoothness = 0.02
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_il4m6"]
+render_priority = 0
+shader = ExtResource("3_c5u4n")
+shader_parameter/albedo_texture = ExtResource("4_tl1u7")
+shader_parameter/replace_color = Color(0, 0.5, 1, 1)
+shader_parameter/threshold = 0.1
+shader_parameter/uv1_scale = Vector3(3, 2, 1)
+shader_parameter/edge_smoothness = 0.02
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_exjmw"]
+render_priority = 0
+shader = ExtResource("3_c5u4n")
+shader_parameter/albedo_texture = ExtResource("4_tl1u7")
+shader_parameter/replace_color = Color(0, 0.5, 1, 1)
+shader_parameter/threshold = 0.1
+shader_parameter/uv1_scale = Vector3(3, 2, 1)
+shader_parameter/edge_smoothness = 0.02
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_4aqjd"]
+render_priority = 0
+shader = ExtResource("3_c5u4n")
+shader_parameter/albedo_texture = ExtResource("4_tl1u7")
+shader_parameter/replace_color = Color(0, 0.5, 1, 1)
+shader_parameter/threshold = 0.1
+shader_parameter/uv1_scale = Vector3(3, 2, 1)
+shader_parameter/edge_smoothness = 0.02
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_u7ctx"]
+render_priority = 0
+shader = ExtResource("3_c5u4n")
+shader_parameter/albedo_texture = ExtResource("4_tl1u7")
+shader_parameter/replace_color = Color(0, 0.5, 1, 1)
+shader_parameter/threshold = 0.1
+shader_parameter/uv1_scale = Vector3(3, 2, 1)
+shader_parameter/edge_smoothness = 0.02
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_b1vfn"]
+render_priority = 0
+shader = ExtResource("3_c5u4n")
+shader_parameter/albedo_texture = ExtResource("6_kuhu5")
+shader_parameter/replace_color = Color(0, 0.5, 1, 1)
+shader_parameter/threshold = 0.1
+shader_parameter/uv1_scale = Vector3(3, 2, 1)
+shader_parameter/edge_smoothness = 0.02
 
 [sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_8qpyi"]
 points = PackedVector3Array(-0.05, -0.05, -0.05, 0.05, -0.05, -0.05, -0.05, 0.05, -0.05, -0.05, -0.05, 0.05)
@@ -19,7 +77,13 @@ metadata/_custom_type_script = "uid://bs8x423e0qgit"
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 transform = Transform3D(10, 0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0)
-mesh = ExtResource("2_5md0w")
+material_override = SubResource("ShaderMaterial_mng0w")
+mesh = ExtResource("4_5ohxu")
+surface_material_override/0 = SubResource("ShaderMaterial_il4m6")
+surface_material_override/1 = SubResource("ShaderMaterial_exjmw")
+surface_material_override/2 = SubResource("ShaderMaterial_4aqjd")
+surface_material_override/3 = SubResource("ShaderMaterial_u7ctx")
+surface_material_override/4 = SubResource("ShaderMaterial_b1vfn")
 script = ExtResource("3_m2b17")
 
 [node name="CollisionShape3D2" type="CollisionShape3D" parent="."]
