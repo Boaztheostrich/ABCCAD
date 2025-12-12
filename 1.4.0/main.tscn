@@ -107,6 +107,7 @@ hand_material = ExtResource("4_efxa6")
 hand_material_override = ExtResource("4_efxa6")
 
 [node name="Table" type="StaticBody3D" parent="."]
+visible = false
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Table"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.497465)
@@ -118,6 +119,7 @@ shape = SubResource("ConvexPolygonShape3D_272bh")
 
 [node name="Test Cube" parent="." instance=ExtResource("3_h2yge")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.63057905, 0.32670283)
+visible = false
 release_mode = 1
 second_hand_grab = 1
 

@@ -57,6 +57,7 @@ pointing/android/enable_long_press_as_right_click=true
 [rendering]
 
 renderer/rendering_method="mobile"
+textures/vram_compression/import_etc2_astc=true
 
 [shader_globals]
 
@@ -108,3 +109,4 @@ openxr/environment_blend_mode=2
 shaders/enabled=true
 openxr/extensions/meta/scene_api=true
 openxr/extensions/meta/passthrough=true
+openxr/extensions/meta/color_space/starting_color_space=3
