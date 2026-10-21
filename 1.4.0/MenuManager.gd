@@ -25,6 +25,8 @@ func _toggle_menu():
 	
 	# If currently hidden, show it and move it
 	if not menu_root.visible:
+		var tutorial := get_parent().get_node_or_null("Viewport2Din3D_tutorial")
+		if tutorial: tutorial.visible = false
 		_summon_menu()
 		_set_pointers_enabled(true)
 	else:

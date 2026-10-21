@@ -25,6 +25,18 @@ func _ready():
 	# Wait longer to clear the "Oculus Black Screen" load
 	await get_tree().create_timer(start_delay).timeout
 	
+	var workbench=get_tree().get_first_node_in_group("cad_workbench")
+	if workbench != null and workbench.enabled:
+		# CAD is the normal entry point. The block tutorial belongs to legacy mode.
+		var main_menu=get_parent().get_node_or_null("Viewport2Din3D")
+		if not workbench._panel_placed and (main_menu == null or not main_menu.visible): workbench.open_panel()
+		return
+	if TutorialSettings.tutorial_seen:
+		return
+	var tutorial_ui = menu_root.get_scene_instance() if menu_root else null
+	if tutorial_ui and tutorial_ui.has_signal("request_close"):
+		tutorial_ui.request_close.connect(_on_tutorial_closed)
+
 	print("🕵️ DEBUG: Timer finished. Attempting to summon menu now...")
 	if menu_root:
 		_summon_menu()
@@ -87,3 +99,10 @@ func _set_pointers_enabled(enabled: bool):
 			ptr.set_process(enabled)
 			if "enabled" in ptr:
 				ptr.enabled = enabled
+
+func _on_tutorial_closed(_never_again: bool):
+	_spawn_attempted = false
+	if menu_root:
+		menu_root.visible = false
+	var main_menu := get_parent().get_node_or_null("Viewport2Din3D")
+	_set_pointers_enabled(main_menu != null and main_menu.visible)

@@ -1,4 +1,4 @@
-[gd_resource type="OpenXRActionMap" load_steps=99 format=3 uid="uid://dcfx73ws534m5"]
+[gd_resource type="OpenXRActionMap" load_steps=100 format=3 uid="uid://dcfx73ws534m5"]
 
 [sub_resource type="OpenXRAction" id="OpenXRAction_6ivru"]
 resource_name = "trigger"
@@ -435,6 +435,10 @@ bindings = [SubResource("OpenXRIPBinding_rtqrf"), SubResource("OpenXRIPBinding_n
 [sub_resource type="OpenXRInteractionProfile" id="OpenXRInteractionProfile_6ivru"]
 interaction_profile_path = "/interaction_profiles/logitech/mx_ink_stylus_logitech"
 
+[sub_resource type="OpenXRInteractionProfile" id="OpenXRInteractionProfile_agent_touch_plus"]
+interaction_profile_path = "/interaction_profiles/meta/touch_controller_plus"
+bindings = [SubResource("OpenXRIPBinding_m5e8q"), SubResource("OpenXRIPBinding_5t7jh"), SubResource("OpenXRIPBinding_chplt"), SubResource("OpenXRIPBinding_obxrh"), SubResource("OpenXRIPBinding_on7oi"), SubResource("OpenXRIPBinding_ege4h"), SubResource("OpenXRIPBinding_h7ix0"), SubResource("OpenXRIPBinding_8qanm"), SubResource("OpenXRIPBinding_3senm"), SubResource("OpenXRIPBinding_7ca55"), SubResource("OpenXRIPBinding_ih1l2"), SubResource("OpenXRIPBinding_ipewn"), SubResource("OpenXRIPBinding_5ngl7"), SubResource("OpenXRIPBinding_klygg"), SubResource("OpenXRIPBinding_4p63k"), SubResource("OpenXRIPBinding_6vi2m"), SubResource("OpenXRIPBinding_888d1"), SubResource("OpenXRIPBinding_246v5"), SubResource("OpenXRIPBinding_xj73r"), SubResource("OpenXRIPBinding_sugej"), SubResource("OpenXRIPBinding_fp7u7"), SubResource("OpenXRIPBinding_gvgeq"), SubResource("OpenXRIPBinding_i0s8c"), SubResource("OpenXRIPBinding_ynetq"), SubResource("OpenXRIPBinding_p8bcx"), SubResource("OpenXRIPBinding_jkemj"), SubResource("OpenXRIPBinding_d3nfp"), SubResource("OpenXRIPBinding_jyu76"), SubResource("OpenXRIPBinding_aecy5"), SubResource("OpenXRIPBinding_8vb80"), SubResource("OpenXRIPBinding_myee0"), SubResource("OpenXRIPBinding_1vv3a"), SubResource("OpenXRIPBinding_tjysa"), SubResource("OpenXRIPBinding_r4yxn"), SubResource("OpenXRIPBinding_me87v"), SubResource("OpenXRIPBinding_d8myu")]
+
 [resource]
 action_sets = [SubResource("OpenXRActionSet_ngwcy")]
-interaction_profiles = [SubResource("OpenXRInteractionProfile_ckeh6"), SubResource("OpenXRInteractionProfile_hsh5n"), SubResource("OpenXRInteractionProfile_vwcd0"), SubResource("OpenXRInteractionProfile_6ivru")]
+interaction_profiles = [SubResource("OpenXRInteractionProfile_agent_touch_plus"), SubResource("OpenXRInteractionProfile_ckeh6"), SubResource("OpenXRInteractionProfile_hsh5n"), SubResource("OpenXRInteractionProfile_vwcd0"), SubResource("OpenXRInteractionProfile_6ivru")]

@@ -7,4 +7,4 @@ func _ready():
 func _on_pressed():
 	print("📂 UI: Load Menu Button Clicked") 
 	# This should probably toggle visibility of your file list panel
-	SignalBus.request_toggle_menu.emit("load_menu")
+	SignalBus.request_toggle_menu.emit()

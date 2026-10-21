@@ -11,7 +11,6 @@ extends Node3D
 @export var shape_offsets: Array[Vector3i] = [] 
 
 # --- COOLDOWN & STATE ---
-var _can_be_grabbed: bool = true
 var last_grid_positions: Array[Vector3i] = []
 var _all_orthogonal_bases: Array[Basis] = [] 
 
@@ -25,9 +24,9 @@ func _ready():
 	print("📐 M_CUBE: Looking for signals on:", parent)
 
 	if parent.has_signal("dropped"):
-		parent.connect("dropped", Callable(self, "_on_dropped"))
+		parent.connect("dropped", Callable(self, "_on_dropped"), CONNECT_DEFERRED)
 	elif parent.has_signal("released"):
-		parent.connect("released", Callable(self, "_on_dropped"))
+		parent.connect("released", Callable(self, "_on_dropped"), CONNECT_DEFERRED)
 	
 	if parent.has_signal("grabbed"):
 		parent.connect("grabbed", Callable(self, "_on_grabbed"))
@@ -71,9 +70,7 @@ func find_closest_rotation(current_basis: Basis) -> Basis:
 	return best_basis
 
 func _on_grabbed(_pickable, _by):
-	# --- COOLDOWN CHECK ---
-	if not _can_be_grabbed:
-		return
+	# XR Tools already accepted this grab; always detach its placed cells.
 
 	print("📐 M_CUBE: ✊ GRABBED")
 	
@@ -93,12 +90,13 @@ func _on_grabbed(_pickable, _by):
 
 # ⭐ UPDATED: Added is_redo flag logic to prevent shifting
 func _on_dropped(_by, is_redo: bool = false):
-	# --- START COOLDOWN (0.5 seconds) ---
-	_can_be_grabbed = false
-	get_tree().create_timer(0.5).timeout.connect(func(): _can_be_grabbed = true)
 	
 	print("📐 M_CUBE: ✋ RELEASED (Calculating Snap...) Is Redo: ", is_redo)
 	var obj = get_parent()
+	# XR Tools briefly drops during a hand swap. Only place after the swap
+	# completes and the object is actually released, never while still held.
+	if obj.is_queued_for_deletion() or (obj.has_method("is_picked_up") and obj.is_picked_up()):
+		return
 	
 	var snapped_center: Vector3
 	var new_grid_positions: Array[Vector3i] = []

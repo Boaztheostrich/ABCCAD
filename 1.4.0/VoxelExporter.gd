@@ -23,128 +23,74 @@ func _on_export_requested():
 	_export_voxels_to_stl()
 	export_cooldown = EXPORT_COOLDOWN_TIME
 
+# The rendered mesh is the geometry source of truth. Grid positions are cell
+# centers, not mesh corners, and multi-cell blocks must only be exported once.
+func build_export_parts(units_per_meter: float = 1.0) -> Array[Mesh]:
+	var cad = get_tree().get_first_node_in_group("cad_document")
+	var export_frame: Transform3D=cad.export_frame_mm() if cad != null else Transform3D.IDENTITY
+	var has_reference: bool=cad != null and not cad.reference_plane.is_empty()
+	var objects: Dictionary = {}
+	for grid_pos in VoxelDatabase.get_all_voxels():
+		var data = VoxelDatabase.get_voxel_data(grid_pos)
+		if data and is_instance_valid(data.object) and not data.object.is_queued_for_deletion():
+			objects[data.object.get_instance_id()] = data.object
+	var parts: Array[Mesh]=[]
+	for block in objects.values():
+		var faces: Array=[]
+		for child in block.find_children("*", "MeshInstance3D", true, false):
+			var mesh_instance := child as MeshInstance3D
+			if mesh_instance.mesh == null or not mesh_instance.is_visible_in_tree():continue
+			for vertex in mesh_instance.mesh.get_faces():
+				var world: Vector3=mesh_instance.global_transform*vertex
+				var point: Vector3=(export_frame*(world*1000.0))*(0.001*units_per_meter) if has_reference else world*units_per_meter
+				faces.append([point.x,point.y,point.z])
+		if not faces.is_empty():parts.append(preload("res://cad/CADDocument.gd").mesh_from_faces(faces))
+	if cad != null:
+		for body in cad.bodies:
+			var faces: Array=[]
+			for point in body.faces:
+				var transformed: Vector3=(export_frame*Vector3(point[0],point[1],point[2]))*(0.001*units_per_meter)
+				faces.append([transformed.x,transformed.y,transformed.z])
+			parts.append(preload("res://cad/CADDocument.gd").mesh_from_faces(faces))
+	return parts
+
+func build_export_mesh(units_per_meter: float = 1.0) -> ArrayMesh:
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var vertex_count := 0
+	for part in build_export_parts(units_per_meter):
+		for vertex in part.get_faces():
+			surface.add_vertex(vertex)
+			vertex_count += 1
+	if vertex_count == 0:return null
+	return surface.commit()
+
+func build_print_export_mesh(units_per_meter: float=1000.0) -> ArrayMesh:
+	var combined_mesh:=build_export_mesh(units_per_meter)
+	if combined_mesh==null: return null
+	var cad=get_tree().get_first_node_in_group("cad_document")
+	# Normalize the complete assembly with one rigid transform and translation;
+	# never independently recenter parts and destroy their alignment.
+	var frame:=Transform3D.IDENTITY
+	if cad!=null and cad.reference_plane.is_empty():
+		frame=cad.print_frame_mm()
+		frame.origin*=units_per_meter*0.001
+	elif cad==null:
+		frame=Transform3D(Basis(Vector3.RIGHT,Vector3.BACK,Vector3.DOWN),Vector3.ZERO)
+	return preload("res://cad/CADDocument.gd").mesh_from_faces(preload("res://cad/CADDocument.gd").print_ready_faces(preload("res://cad/CADDocument.gd").faces_from_mesh(combined_mesh),frame))
+
 func _export_voxels_to_stl():
-	var voxel_count = VoxelDatabase.get_voxel_count()
-	
-	if voxel_count == 0:
-		print("❌ No voxels to export! Place some cubes first.")
+	var cad = get_tree().get_first_node_in_group("cad_document")
+	var workbench = get_tree().get_first_node_in_group("cad_workbench")
+	var millimeters: bool=(workbench != null and workbench.enabled) or (cad != null and (not cad.bodies.is_empty() or not cad.reference_plane.is_empty()))
+	# Mesh.get_faces() welds vertices at 0.0001 mesh units. Build in final units
+	# so advanced exports retain 0.0001 mm rather than 0.1 mm resolution.
+	var combined_mesh := build_print_export_mesh(1000.0 if millimeters else 1.0)
+	if combined_mesh == null:
+		SignalBus.export_finished.emit(false,"Nothing to export. Place a block or extrude a CAD part first.")
 		return
-	
-	print("📦 Exporting", voxel_count, "voxels...")
-	
-	# Create surface tool for combining
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	
-	# Get all voxel grid positions
-	var grid_positions = VoxelDatabase.get_all_voxels()
-	
-	var cube_count = 0
-	var wedge_count = 0
-	var corner_wedge_count = 0
-	
-	# Handle different shape types
-	for grid_pos in grid_positions:
-		var world_pos = VoxelDatabase.grid_to_world(grid_pos)
-		var voxel_data = VoxelDatabase.get_voxel_data(grid_pos)
-		
-		if voxel_data and is_instance_valid(voxel_data.object):
-			# print("  🔧 Exporting", voxel_data.shape_type, "at grid:", grid_pos, "world:", world_pos)
-			
-			match voxel_data.shape_type:
-				"cube":
-					_add_cube_to_surface(st, world_pos, VoxelDatabase.voxel_size)
-					cube_count += 1
-				"brick": 
-					_add_cube_to_surface(st, world_pos, VoxelDatabase.voxel_size)
-					cube_count += 1
-				"m_cube":
-					_add_cube_to_surface(st, world_pos, VoxelDatabase.voxel_size)
-					cube_count += 1
-				"corner_wedge":
-					_add_corner_wedge_to_surface(st, world_pos, VoxelDatabase.voxel_size, voxel_data.rotation)
-					corner_wedge_count += 1
-				"wedge":
-					_add_wedge_to_surface(st, world_pos, VoxelDatabase.voxel_size, voxel_data.rotation)
-					wedge_count += 1
-				_:
-					print("⚠️ Unknown shape type:", voxel_data.shape_type, "at", grid_pos)
-	
-	print("📊 Export summary: ", cube_count, "cubes, ", wedge_count, "wedges", corner_wedge_count, "corner wedges")
-	
-	# Commit the combined mesh
-	var combined_mesh := st.commit()
-	print("✅ Mesh combined with", combined_mesh.get_surface_count(), "surface(s)")
-	
-	# Get the Downloads folder path (cross-platform)
-	var downloads_path: String = OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS)
-	
-	# Create timestamped filename
-	var timestamp = Time.get_datetime_string_from_system().replace(":", "-")
-	var filename = "voxel_build_" + timestamp + ".stl"
-	var file_path: String = downloads_path.path_join(filename)
-	
-	var result = STLIO.Exporter.SaveToPath(combined_mesh, file_path)
-	
-	if result == OK:
-		print("✅✅✅ STL EXPORTED SUCCESSFULLY! ✅✅✅")
-		print("📂 Saved to Downloads folder: ", file_path)
-	else:
-		print("❌ Export failed with error:", result)
-
-# --- GEOMETRY HELPERS ---
-
-func _add_cube_to_surface(st: SurfaceTool, pos: Vector3, size: float):
-	var verts = [
-		Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(1, 1, 0), Vector3(0, 1, 0),
-		Vector3(0, 0, 1), Vector3(1, 0, 1), Vector3(1, 1, 1), Vector3(0, 1, 1)
-	]
-	for i in range(verts.size()):
-		verts[i] = verts[i] * size + pos
-	var faces = [
-		[0, 2, 1,  0, 3, 2], [5, 7, 4,  5, 6, 7], [4, 3, 0,  4, 7, 3],
-		[1, 6, 5,  1, 2, 6], [3, 6, 2,  3, 7, 6], [4, 1, 5,  4, 0, 1]
-	]
-	for face in faces:
-		for idx in face:
-			st.add_vertex(verts[idx])
-
-func _add_corner_wedge_to_surface(st: SurfaceTool, pos: Vector3, size: float, rotation: Basis):
-	var half_size = size * 0.5
-	var center = pos + Vector3(half_size, half_size, half_size)
-	var peak = Vector3(-0.5, 0.5, -0.5)
-	var bot_back_left = Vector3(-0.5, -0.5, -0.5)
-	var bot_back_right = Vector3(0.5, -0.5, -0.5)
-	var bot_fwd_right = Vector3(0.5, -0.5, 0.5)
-	var bot_fwd_left = Vector3(-0.5, -0.5, 0.5)
-	var verts = [peak, bot_back_left, bot_back_right, bot_fwd_right, bot_fwd_left]
-	
-	var x_tilt = 270.0; var y_spin = 90.0
-	var correction_basis = Basis(Vector3.RIGHT, deg_to_rad(x_tilt)) * Basis(Vector3.UP, deg_to_rad(y_spin))
-	
-	for i in range(verts.size()):
-		verts[i] = (rotation * (correction_basis * verts[i])) * size + center
-	
-	var triangles = [
-		[verts[1], verts[3], verts[2]], [verts[1], verts[4], verts[3]],
-		[verts[1], verts[0], verts[2]], [verts[1], verts[4], verts[0]],
-		[verts[0], verts[2], verts[3]], [verts[0], verts[3], verts[4]]
-	]
-	for tri in triangles:
-		for vert in tri: st.add_vertex(vert)
-
-func _add_wedge_to_surface(st: SurfaceTool, pos: Vector3, size: float, rotation: Basis):
-	var half_size = size * 0.5
-	var center = pos + Vector3(half_size, half_size, half_size)
-	var verts = [
-		Vector3(0.5, -0.5, -0.5), Vector3(0.5, -0.5, 0.5), Vector3(-0.5, -0.5, 0.5),
-		Vector3(-0.5, -0.5, -0.5), Vector3(-0.5, 0.5, -0.5), Vector3(-0.5, 0.5, 0.5),
-	]
-	for i in range(verts.size()):
-		verts[i] = (rotation * (verts[i] * size)) + center
-	var triangles = [
-		[0, 2, 1], [0, 3, 2], [3, 5, 2], [3, 4, 5],
-		[3, 4, 0], [2, 5, 1], [0, 4, 5], [0, 5, 1],
-	]
-	for tri in triangles:
-		for idx in tri: st.add_vertex(verts[idx])
+	var result: Dictionary=preload("res://STLExport.gd").save(combined_mesh,"voxel_build_",[],build_export_parts(1000.0 if millimeters else 1.0))
+	var message: String=preload("res://STLExport.gd").message(result,millimeters)
+	print(message)
+	if result.error==OK: print("STL path: ",result.path)
+	SignalBus.export_finished.emit(result.error==OK,message)

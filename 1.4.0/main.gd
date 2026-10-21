@@ -5,6 +5,9 @@ extends Node3D
 var xr_interface: OpenXRInterface
 
 func _ready():
+	var workbench = preload("res://cad/CADWorkbench.gd").new()
+	workbench.name = "AdvancedCAD"
+	add_child(workbench)
 	await get_tree().process_frame
 	
 	xr_interface = XRServer.find_interface("OpenXR")
@@ -22,7 +25,7 @@ func _ready():
 		print("Connected to pose_recentered signal")
 		
 		# Enable passthrough on startup
-		_enable_passthrough(true)
+		_enable_passthrough("--opaque" not in OS.get_cmdline_user_args())
 	else:
 		print("OpenXR not initialized, please check if your headset is connected")
 

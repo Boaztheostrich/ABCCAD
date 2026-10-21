@@ -36,9 +36,11 @@ static func SaveToBytes(mesh :Mesh, header := PackedByteArray()) -> Variant:
 	var base_offset := 84
 	while i < faces.size():
 		v0 = faces[i]
-		v1 = faces[i+1]
-		v2 = faces[i+2]
-		normal = Plane(v0, v1, v2).normal
+		# Godot uses clockwise front faces. STL uses the right-hand rule:
+		# counterclockwise vertices viewed from outside, matching the normal.
+		v1 = faces[i+2]
+		v2 = faces[i+1]
+		normal = (v1-v0).cross(v2-v0).normalized()
 		bytes.encode_float(base_offset+FLOAT_SIZE*0, normal.x)
 		bytes.encode_float(base_offset+FLOAT_SIZE*1, normal.y)
 		bytes.encode_float(base_offset+FLOAT_SIZE*2, normal.z)

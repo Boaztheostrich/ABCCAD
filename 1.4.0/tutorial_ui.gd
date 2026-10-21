@@ -1,6 +1,6 @@
 extends Control
 
-signal request_close
+signal request_close(never_again: bool)
 
 @onready var close_button := $ColorRect/MarginContainer/MainMenu/HBoxContainer/CloseButton
 @onready var never_button := $ColorRect/MarginContainer/MainMenu/HBoxContainer/NeverShowButton

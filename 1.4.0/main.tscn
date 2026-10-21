@@ -141,9 +141,11 @@ shape = SubResource("BoxShape3D_1bvp3")
 [node name="OmniLight3D" type="OmniLight3D" parent="."]
 
 [node name="OmniLight3D5" type="OmniLight3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9636378, -3.4276397)
 
 [node name="OmniLight3D4" type="OmniLight3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.1919622, 1.0558519, 0)
 
 [node name="OmniLight3D3" type="OmniLight3D" parent="."]

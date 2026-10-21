@@ -1,4 +1,6 @@
-[gd_scene load_steps=9 format=3 uid="uid://dx2x8m35c5yxe"]
+[gd_scene load_steps=10 format=3 uid="uid://dx2x8m35c5yxe"]
+
+[ext_resource type="Script" path="res://collision_shape_3d_2.gd" id="99_geometry_collision"]
 
 [ext_resource type="Script" uid="uid://b5vvsxj3jnk1r" path="res://node_3d.gd" id="1_jbd7x"]
 [ext_resource type="Script" uid="uid://bs8x423e0qgit" path="res://addons/godot-xr-tools/objects/pickable.gd" id="1_wd2d1"]
@@ -35,6 +37,7 @@ mesh = SubResource("BoxMesh_dmbnc")
 script = ExtResource("2_ftslj")
 
 [node name="CollisionShape3D2" type="CollisionShape3D" parent="."]
+script = ExtResource("99_geometry_collision")
 shape = SubResource("ConvexPolygonShape3D_y8ul7")
 
 [node name="VoxelLogic" type="Node3D" parent="."]

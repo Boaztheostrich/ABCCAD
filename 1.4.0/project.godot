@@ -22,6 +22,7 @@ XRToolsRumbleManager="*res://addons/godot-xr-tools/rumble/rumble_manager.gd"
 VoxelDatabase="*res://VoxelDatabase.gd"
 SignalBus="*res://SignalBus.gd"
 TutorialSettings="*res://TutorialSettings.gd"
+DriveUpload="*res://DriveUpload.gd"
 
 [editor_plugins]
 

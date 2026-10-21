@@ -1,0 +1,5 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource type="PackedScene" path="res://main.tscn" id="1"]
+[ext_resource type="Script" path="res://tests/cad_multi_pointer.gd" id="2"]
+[node name="Main" instance=ExtResource("1")]
+script = ExtResource("2")

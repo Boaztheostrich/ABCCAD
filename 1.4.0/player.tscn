@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://bry03y103465e"]
+[gd_scene load_steps=13 format=3 uid="uid://bry03y103465e"]
 
 [ext_resource type="Script" uid="uid://c5tkjvl47mgia" path="res://left_hand.gd" id="1_2hs0m"]
 [ext_resource type="PackedScene" uid="uid://bq86r4yll8po" path="res://addons/godot-xr-tools/hands/scenes/lowpoly/left_fullglove_low.tscn" id="1_yu5ic"]
@@ -11,6 +11,8 @@
 [ext_resource type="PackedScene" uid="uid://e1jjbvifbn3q" path="res://m_cube.tscn" id="8_b26j0"]
 [ext_resource type="PackedScene" uid="uid://wsk8byls04qi" path="res://Corner_piece.tscn" id="9_n7ghd"]
 [ext_resource type="PackedScene" uid="uid://cqhw276realc" path="res://addons/godot-xr-tools/functions/function_pointer.tscn" id="9_nvl01"]
+
+[ext_resource type="Script" path="res://UIControllerPointer.gd" id="10_ui_pointer"]
 
 [node name="XROrigin3D" type="XROrigin3D"]
 
@@ -27,8 +29,13 @@ block_scenes = Array[PackedScene]([ExtResource("6_1jxqw"), ExtResource("4_sweqy"
 [node name="FunctionPickup" parent="LeftHand/LeftHand" instance=ExtResource("2_i3pqv")]
 
 [node name="FunctionPointer" parent="LeftHand/LeftHand" instance=ExtResource("9_nvl01")]
-show_laser = 2
+script = ExtResource("10_ui_pointer")
+y_offset = 0.0
+show_laser = 1
 laser_length = 1
+show_target = true
+target_radius = 0.004
+suppress_mask = 0
 
 [node name="RightHand" type="XRController3D" parent="."]
 tracker = &"right_hand"
@@ -40,5 +47,10 @@ block_scenes = Array[PackedScene]([ExtResource("6_1jxqw"), ExtResource("4_sweqy"
 [node name="FunctionPickup" parent="RightHand/RightHand" instance=ExtResource("2_i3pqv")]
 
 [node name="FunctionPointer" parent="RightHand/RightHand" instance=ExtResource("9_nvl01")]
-show_laser = 2
+script = ExtResource("10_ui_pointer")
+y_offset = 0.0
+show_laser = 1
 laser_length = 1
+show_target = true
+target_radius = 0.004
+suppress_mask = 0

@@ -1,0 +1,5 @@
+tools/
+evidence/
+rollback/
+__pycache__/
+session.*

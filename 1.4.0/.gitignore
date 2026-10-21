@@ -1,3 +1,29 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Private personal Drive upload credential
+/drive_upload.cfg
+
+# Local credentials and generated artifacts
+.DS_Store
+.env
+.env.*
+*.keystore
+*.jks
+*.pem
+*.key
+*.p12
+*.pfx
+*.apk
+*.aab
+*.pck
+*.log
+*.pyc
+__pycache__/
+/builds/
+/tools/xr_agent/evidence/
+/tools/xr_agent/rollback/
+/tools/xr_agent/session.*
+/tools/xr_agent/config.json
+/tools/drive_upload/live_test_result.txt
